@@ -25,7 +25,19 @@ export interface Settings {
   showCostEstimate: boolean;
 }
 
-export type AppScreen = 'import' | 'processing' | 'editor' | 'clips';
+export type AppScreen = 'import' | 'processing' | 'editor' | 'clips' | 'youtube';
+
+export type SegmentDurationRange = '4-6' | '7-10' | '11-15' | '15-20';
+
+export interface VideoSegment {
+  id: string;
+  title: string;
+  topicSummary: string;
+  startSeconds: number;
+  endSeconds: number;
+  cues: Cue[];
+  selected: boolean;
+}
 
 export interface Clip {
   id: string;

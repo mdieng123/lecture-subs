@@ -184,6 +184,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             <div className="flex justify-between text-[10px] text-[hsl(215,15%,40%)] mt-0.5">
               <span>5 min</span><span>30 min</span>
             </div>
+            <p className="text-[10px] text-[hsl(215,15%,42%)] mt-1.5">Under 15 min video → 5 min · 15–60 min → 15 min · 60 min+ → 20 min. Don't exceed 20 min — larger chunks hit Groq's 25 MB upload limit.</p>
           </div>
 
           {/* Max concurrent chunks */}
@@ -203,6 +204,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             <div className="flex justify-between text-[10px] text-[hsl(215,15%,40%)] mt-0.5">
               <span>1</span><span>5</span>
             </div>
+            <p className="text-[10px] text-[hsl(215,15%,42%)] mt-1.5">2–3 recommended. Higher = faster processing but risks hitting Groq rate limits.</p>
           </div>
 
           {/* Logo watermark */}

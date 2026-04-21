@@ -39,9 +39,11 @@ ipcMain.handle('files:openAny', async () => {
   const result = await dialog.showOpenDialog({
     title: 'Open Video or Project',
     filters: [
-      { name: 'All Supported', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'lecturesubs'] },
+      { name: 'All Supported', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'lecturesubs', 'lectureclips', 'lecturesegments'] },
       { name: 'Video Files', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi'] },
       { name: 'LectureSubs Project', extensions: ['lecturesubs'] },
+      { name: 'LectureSubs Clips', extensions: ['lectureclips'] },
+      { name: 'LectureSubs Segments', extensions: ['lecturesegments'] },
     ],
     properties: ['openFile'],
   })
@@ -110,6 +112,24 @@ ipcMain.handle('files:clearDownloads', () => {
     fs.mkdirSync(DOWNLOADS_DIR)
   }
   return { ok: true }
+})
+
+ipcMain.handle('files:listDownloads', () => {
+  if (!fs.existsSync(DOWNLOADS_DIR)) return []
+  const videoExts = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi'])
+  const results: { name: string; path: string; createdAt: number }[] = []
+  for (const entry of fs.readdirSync(DOWNLOADS_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = path.join(DOWNLOADS_DIR, entry.name)
+    for (const file of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!file.isFile()) continue
+      if (!videoExts.has(path.extname(file.name).toLowerCase())) continue
+      const filePath = path.join(dir, file.name)
+      const stat = fs.statSync(filePath)
+      results.push({ name: file.name, path: filePath, createdAt: stat.birthtimeMs })
+    }
+  }
+  return results.sort((a, b) => b.createdAt - a.createdAt)
 })
 
 ipcMain.handle('files:exists', (_event, filePath: string) => {

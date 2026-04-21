@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useProjectStore } from '../state/projectStore'
+import { useClipsStore } from '../state/clipsStore'
+import { useSegmentsStore } from '../state/segmentsStore'
 import SettingsDialog from './SettingsDialog'
 import { formatDuration } from '../utils'
 
@@ -13,6 +15,7 @@ interface VideoInfo {
 export default function ImportScreen() {
   const hasApiKey = useProjectStore((s) => s.hasApiKey)
   const hasGroqKey = useProjectStore((s) => s.hasGroqKey)
+  const groqQuotaExhaustedAt = useProjectStore((s) => s.groqQuotaExhaustedAt)
   const settings = useProjectStore((s) => s.settings)
   const setScreen = useProjectStore((s) => s.setScreen)
   const setProcessing = useProjectStore((s) => s.setProcessing)
@@ -24,9 +27,18 @@ export default function ImportScreen() {
   const [tab, setTab] = useState<'file' | 'youtube'>('file')
   const [ytUrl, setYtUrl] = useState('')
   const [ytDownloading, setYtDownloading] = useState(false)
-  const [ytProgress, setYtProgress] = useState(0)
+  const [, setYtProgress] = useState(0)
   const [ytStatus, setYtStatus] = useState('')
+  const [downloads, setDownloads] = useState<{ name: string; path: string; createdAt: number }[]>([])
   const cancelRef = useRef(false)
+
+  function refreshDownloads() {
+    window.api.files.listDownloads().then(setDownloads)
+  }
+
+  useEffect(() => {
+    refreshDownloads()
+  }, [])
 
   useEffect(() => {
     const unsub = window.api.youtube.onProgress((data: unknown) => {
@@ -52,6 +64,7 @@ export default function ImportScreen() {
       const { filePath, title } = await window.api.youtube.download(url, ytDir)
       if (cancelRef.current) return
       await loadVideo(filePath, title)
+      refreshDownloads()
     } catch (err) {
       if (!cancelRef.current) {
         setLoadError(err instanceof Error ? err.message : String(err))
@@ -83,6 +96,77 @@ export default function ImportScreen() {
       setTab('file')
     } catch (err) {
       setLoadError(`Could not read video: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  async function loadClipsFile(rawJson: string, filePath: string) {
+    try {
+      const data = JSON.parse(rawJson)
+      const videoExists = await window.api.files.exists(data.videoPath)
+      let videoPath = data.videoPath
+      if (!videoExists) {
+        setLoadError(`Video not found: "${data.videoPath.split('/').pop()}". Please locate it.`)
+        const picked = await window.api.files.openAny()
+        if (!picked || picked.endsWith('.lecturesubs') || picked.endsWith('.lectureclips')) {
+          setLoadError('Could not locate video — clips not loaded.')
+          return
+        }
+        videoPath = picked
+        setLoadError(null)
+      }
+      // Build a minimal project so the clips screen has videoPath context
+      const project = {
+        videoPath,
+        audioPath: '',
+        durationSeconds: 0,
+        cues: [],
+        history: [],
+        future: [],
+        createdAt: Date.now(),
+        projectFilePath: data.projectFilePath ?? undefined,
+      }
+      setProject(project)
+      useClipsStore.getState().setClips(data.clips ?? [])
+      useClipsStore.getState().markSaved(filePath)
+      useClipsStore.getState().setReturnScreen('import')
+      setScreen('clips')
+    } catch {
+      setLoadError('Failed to load clips file.')
+    }
+  }
+
+  async function loadSegmentsFile(rawJson: string, filePath: string) {
+    try {
+      const data = JSON.parse(rawJson)
+      const videoExists = await window.api.files.exists(data.videoPath)
+      let videoPath = data.videoPath
+      if (!videoExists) {
+        setLoadError(`Video not found: "${data.videoPath.split('/').pop()}". Please locate it.`)
+        const picked = await window.api.files.openAny()
+        if (!picked || picked.endsWith('.lecturesubs') || picked.endsWith('.lectureclips') || picked.endsWith('.lecturesegments')) {
+          setLoadError('Could not locate video — segments not loaded.')
+          return
+        }
+        videoPath = picked
+        setLoadError(null)
+      }
+      const project = {
+        videoPath,
+        audioPath: '',
+        durationSeconds: 0,
+        cues: [],
+        history: [],
+        future: [],
+        createdAt: Date.now(),
+        projectFilePath: data.projectFilePath ?? undefined,
+      }
+      setProject(project)
+      useSegmentsStore.getState().setSegments(data.segments ?? [])
+      useSegmentsStore.getState().markSaved(filePath)
+      useSegmentsStore.getState().setReturnScreen('import')
+      setScreen('youtube')
+    } catch {
+      setLoadError('Failed to load segments file.')
     }
   }
 
@@ -120,6 +204,18 @@ export default function ImportScreen() {
       await loadProject(raw, filePath)
       return
     }
+    if (ext === 'lectureclips') {
+      const filePath = window.api.getFilePath(file)
+      const raw = await window.api.files.readFile(filePath)
+      await loadClipsFile(raw, filePath)
+      return
+    }
+    if (ext === 'lecturesegments') {
+      const filePath = window.api.getFilePath(file)
+      const raw = await window.api.files.readFile(filePath)
+      await loadSegmentsFile(raw, filePath)
+      return
+    }
     const allowed = ['mp4', 'mov', 'mkv', 'webm', 'avi']
     if (!allowed.includes(ext)) {
       setLoadError(`Unsupported file type: .${ext}`)
@@ -134,6 +230,12 @@ export default function ImportScreen() {
     if (filePath.endsWith('.lecturesubs')) {
       const raw = await window.api.files.readFile(filePath)
       await loadProject(raw, filePath)
+    } else if (filePath.endsWith('.lectureclips')) {
+      const raw = await window.api.files.readFile(filePath)
+      await loadClipsFile(raw, filePath)
+    } else if (filePath.endsWith('.lecturesegments')) {
+      const raw = await window.api.files.readFile(filePath)
+      await loadSegmentsFile(raw, filePath)
     } else {
       await loadVideo(filePath)
     }
@@ -227,7 +329,7 @@ export default function ImportScreen() {
                 <div className="space-y-3">
                   <div className="text-4xl opacity-40">📹</div>
                   <div className="text-[hsl(210,20%,80%)] font-medium">Drop video here or click to browse</div>
-                  <div className="text-sm text-[hsl(215,15%,50%)]">MP4, MOV, MKV, WebM, AVI · .lecturesubs</div>
+                  <div className="text-sm text-[hsl(215,15%,50%)]">MP4, MOV, MKV, WebM, AVI · .lecturesubs · .lectureclips · .lecturesegments</div>
                 </div>
               </div>
             ) : (
@@ -261,17 +363,25 @@ export default function ImportScreen() {
                 </div>
 
                 {ytDownloading && (
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex justify-between text-xs text-[hsl(215,15%,50%)]">
-                      <span className="truncate max-w-[80%]">{ytStatus || 'Downloading...'}</span>
-                      <span>{ytProgress}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-[hsl(222,20%,22%)] rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[hsl(210,80%,55%)] transition-all duration-300"
-                        style={{ width: `${ytProgress}%` }}
-                      />
-                    </div>
+                  <div className="flex items-center gap-2.5 text-xs text-[hsl(215,15%,50%)]">
+                    <div className="w-3.5 h-3.5 border-2 border-[hsl(210,80%,55%)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                    <span className="truncate">{ytStatus || 'Downloading...'}</span>
+                  </div>
+                )}
+
+                {downloads.length > 0 && (
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    <p className="text-[10px] text-[hsl(215,15%,40%)] uppercase tracking-wide">Previously downloaded</p>
+                    {downloads.map((d) => (
+                      <button
+                        key={d.path}
+                        onClick={() => loadVideo(d.path)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[hsl(220,15%,22%)] bg-[hsl(222,20%,13%)] hover:border-[hsl(220,15%,35%)] hover:bg-[hsl(222,20%,16%)] text-left transition-colors"
+                      >
+                        <span className="text-base">🎬</span>
+                        <span className="text-xs text-[hsl(210,20%,80%)] truncate">{d.name}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -290,16 +400,16 @@ export default function ImportScreen() {
         <div className="relative group">
           <button
             onClick={handleStart}
-            disabled={!videoInfo || !hasApiKey || !hasGroqKey}
+            disabled={!videoInfo || !hasApiKey || !hasGroqKey || !!groqQuotaExhaustedAt}
             className="px-8 py-3 rounded-lg font-semibold text-base transition-all
               bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white
               disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[hsl(210,80%,55%)]"
           >
             Transcribe &amp; Translate
           </button>
-          {(!hasApiKey || !hasGroqKey) && (
+          {(!hasApiKey || !hasGroqKey || !!groqQuotaExhaustedAt) && (
             <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[hsl(222,20%,20%)] border border-[hsl(220,15%,30%)] text-xs px-3 py-1.5 rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              {!hasApiKey ? 'Add your Gemini API key in Settings' : 'Add your Groq API key in Settings'}
+              {groqQuotaExhaustedAt ? 'Groq quota exhausted — wait for the timer to clear' : !hasApiKey ? 'Add your Gemini API key in Settings' : 'Add your Groq API key in Settings'}
             </div>
           )}
         </div>

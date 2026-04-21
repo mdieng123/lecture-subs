@@ -126,7 +126,7 @@ export default function CueRow({ cue, isSelected, isActive, index, onSelect, vid
       <div className="flex items-center gap-1 mt-1.5">
         <button
           onClick={(e) => { e.stopPropagation(); mergeWithNext(cue.id) }}
-          className="text-[9px] px-1.5 py-0.5 rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,50%)] hover:text-white hover:border-[hsl(220,15%,40%)] transition-colors"
+          className="text-xs px-2 py-1 rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,50%)] hover:text-white hover:border-[hsl(220,15%,40%)] transition-colors"
           title="Merge with next (⌘M)"
         >
           merge↓

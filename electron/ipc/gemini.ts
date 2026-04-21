@@ -5,6 +5,19 @@ import fs from 'fs'
 import { scrubError } from './store'
 
 let cancelRequested = false
+let groqQuotaExhausted = false
+
+// Serialize all Groq audio calls — concurrent chunks hitting the API simultaneously
+// causes cascading rate limit failures. One at a time avoids this entirely.
+let groqQueue: Promise<void> = Promise.resolve()
+function enqueueGroq<T>(fn: () => Promise<T>): Promise<T> {
+  const result = groqQueue.then(() => {
+    if (groqQuotaExhausted) throw new Error('QUOTA_ALREADY_EXHAUSTED')
+    return fn()
+  })
+  groqQueue = result.then(() => {}, () => {})
+  return result
+}
 
 function getMainWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
@@ -102,21 +115,59 @@ async function groqTranscribeAndTranslate(
 
   // Step 1: Groq Whisper — word-level timestamps for accurate sync
   const fileData = fs.readFileSync(audioPath)
+  const fileSizeMB = fileData.byteLength / (1024 * 1024)
+  if (fileSizeMB > 24) {
+    throw new Error(`Audio chunk is ${fileSizeMB.toFixed(0)} MB — Groq's limit is 25 MB. Reduce chunk size in Settings (15 min is safe).`)
+  }
   const formData = new FormData()
-  formData.append('file', new Blob([fileData], { type: 'audio/flac' }), 'audio.flac')
+  formData.append('file', new Blob([fileData], { type: 'audio/mpeg' }), 'audio.mp3')
   formData.append('model', 'whisper-large-v3')
   formData.append('language', 'ar')
   formData.append('response_format', 'verbose_json')
   formData.append('timestamp_granularities[]', 'word')
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${groqKey}` },
-    body: formData,
+  const { groqRes, lastErrText } = await enqueueGroq(async () => {
+    let groqRes!: Response
+    let lastErrText = ''
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${groqKey}` },
+        body: formData,
+      })
+      if (groqRes.ok) break
+      if (groqRes.status === 400) break
+      lastErrText = await groqRes.text().catch(() => groqRes.statusText)
+      if (groqRes.status === 429) {
+        const waitMatch = lastErrText.match(/try again in (?:(\d+)m)?([\d.]+)s/i)
+        const waitMs = waitMatch
+          ? ((parseInt(waitMatch[1] ?? '0') * 60) + parseFloat(waitMatch[2])) * 1000 + 2000
+          : 15000
+        const usedMatch = lastErrText.match(/Used\s+([\d.]+)/i)
+        const limitMatch = lastErrText.match(/Limit\s+([\d.]+)/i)
+        const requestedMatch = lastErrText.match(/Requested\s+([\d.]+)/i)
+        const used = usedMatch ? Math.round(parseFloat(usedMatch[1])) : null
+        const limit = limitMatch ? Math.round(parseFloat(limitMatch[1])) : null
+        const requested = requestedMatch ? Math.round(parseFloat(requestedMatch[1])) : null
+        const nearlyExhausted = used !== null && limit !== null && used / limit > 0.9
+        sendProgress(win, {
+          chunkIndex, totalChunks,
+          status: nearlyExhausted ? 'quota_exhausted' : 'waiting',
+          retryInMs: waitMs, used, limit, requested,
+        })
+        if (nearlyExhausted) {
+          groqQuotaExhausted = true
+          throw new Error(`QUOTA_EXHAUSTED:${used}:${limit}:${waitMs}`)
+        }
+        await new Promise((r) => setTimeout(r, waitMs))
+      } else {
+        await new Promise((r) => setTimeout(r, attempt * 2000))
+      }
+    }
+    return { groqRes, lastErrText }
   })
   if (!groqRes.ok) {
-    const errText = await groqRes.text().catch(() => groqRes.statusText)
-    throw new Error(`Groq transcription failed: ${errText}`.replace(groqKey, '[REDACTED]'))
+    throw new Error(`Groq transcription failed: ${lastErrText || groqRes.statusText}`.replace(groqKey, '[REDACTED]'))
   }
   const groqData = await groqRes.json() as { words?: GroqWord[] }
   const words = (groqData.words ?? []).filter((w) => w.word.trim().length > 0)
@@ -224,6 +275,74 @@ Return JSON with a clips array.`
   }
 })
 
+const SEGMENTS_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    segments: {
+      type: 'array' as const,
+      items: {
+        type: 'object' as const,
+        properties: {
+          start_seconds: { type: 'number' as const },
+          end_seconds: { type: 'number' as const },
+          title: { type: 'string' as const },
+          topic_summary: { type: 'string' as const },
+        },
+        required: ['start_seconds', 'end_seconds', 'title', 'topic_summary'],
+      },
+    },
+  },
+  required: ['segments'],
+}
+
+ipcMain.handle('gemini:detectSegments', async (_event, transcript: string, durationRange: string) => {
+  const apiKey = await getApiKey()
+  if (!apiKey) return { error: 'No API key configured' }
+
+  const store = new Store()
+  const model = (store.get('model') as string) ?? 'gemini-2.5-pro'
+  const ai = new GoogleGenAI({ apiKey })
+
+  const rangeMap: Record<string, { minSec: number; maxSec: number; label: string }> = {
+    '4-6':   { minSec: 240,  maxSec: 360,  label: '4–6 minutes' },
+    '7-10':  { minSec: 420,  maxSec: 600,  label: '7–10 minutes' },
+    '11-15': { minSec: 660,  maxSec: 900,  label: '11–15 minutes' },
+    '15-20': { minSec: 900,  maxSec: 1200, label: '15–20 minutes' },
+  }
+  const range = rangeMap[durationRange] ?? rangeMap['7-10']
+
+  const prompt = `You are a YouTube content editor for an Islamic lecture channel. Below is the full lecture transcript with timestamps (format: [M:SS-M:SS] "English text").
+
+Split this lecture into YouTube videos of ${range.label} each (${range.minSec}–${range.maxSec} seconds per segment).
+
+STRICT RULES:
+- Cover the ENTIRE lecture from start to finish — no gaps, no omitted content.
+- Segments must not overlap — each second belongs to exactly one segment.
+- Each segment duration MUST be between ${range.minSec} and ${range.maxSec} seconds. Do not go under or over.
+- Every segment must cover a COMPLETE sub-topic. Never split mid-argument, mid-story, or mid-hadith.
+- Start point: begin at a natural topic boundary — where the speaker starts a new point, hadith, or idea.
+- End point: end after the speaker fully concludes a thought — not mid-sentence, not mid-list.
+- Titles must be specific, YouTube-friendly, and describe what is actually taught. Avoid vague titles like "Part 1" or "Lecture Segment". Aim for something a viewer would search for.
+- topic_summary: 1–2 sentences describing exactly what is covered.
+
+Transcript:
+${transcript}
+
+Return JSON with a segments array covering the full video.`
+
+  try {
+    const result = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: SEGMENTS_SCHEMA },
+    })
+    const parsed = JSON.parse(result.text ?? '{}')
+    return { segments: parsed.segments ?? [] }
+  } catch (err) {
+    return { error: scrubError(err).message }
+  }
+})
+
 ipcMain.handle('gemini:cancelProcessing', () => {
   cancelRequested = true
   return { ok: true }
@@ -233,6 +352,7 @@ ipcMain.handle(
   'gemini:transcribeChunk',
   async (_event, audioPath: string, chunkIndex: number, totalChunks: number, offsetSeconds: number) => {
     cancelRequested = false
+    groqQuotaExhausted = false
     const apiKey = await getApiKey()
     if (!apiKey) return { error: 'No Gemini API key configured' }
 

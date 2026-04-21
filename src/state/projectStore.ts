@@ -13,14 +13,17 @@ interface ProjectStore {
   hasApiKey: boolean
   hasGroqKey: boolean
   logoSettings: LogoSettings
+  groqQuotaExhaustedAt: number | null
 
   setScreen: (screen: AppScreen) => void
   setProject: (project: Project) => void
+  setProjectFilePath: (path: string) => void
   clearProject: () => void
   setProcessing: (p: ProcessingProgress | null | ((prev: ProcessingProgress | null) => ProcessingProgress | null)) => void
   setHasApiKey: (v: boolean) => void
   setHasGroqKey: (v: boolean) => void
   setLogoSettings: (s: Partial<LogoSettings>) => void
+  setGroqQuotaExhaustedAt: (v: number | null) => void
   setSettings: (s: Partial<Settings>) => void
   setSubtitleStyle: (s: Partial<SubtitleStyle>) => void
 
@@ -59,15 +62,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   hasApiKey: false,
   hasGroqKey: false,
   logoSettings: { path: null, position: 'top-right', size: 'medium', opacity: 100, enabled: false },
+  groqQuotaExhaustedAt: null,
 
   setScreen: (screen) => set({ screen }),
   setProject: (project) => set({ project, screen: 'editor' }),
+  setProjectFilePath: (path) => set((s) => s.project ? { project: { ...s.project, projectFilePath: path } } : {}),
   clearProject: () => set({ project: null, screen: 'import', processing: null }),
   setProcessing: (p) => set((state) => ({
     processing: typeof p === 'function' ? p(state.processing) : p,
   })),
   setHasApiKey: (hasApiKey) => set({ hasApiKey }),
   setHasGroqKey: (hasGroqKey) => set({ hasGroqKey }),
+  setGroqQuotaExhaustedAt: (v) => set({ groqQuotaExhaustedAt: v }),
   setLogoSettings: (s) => set((state) => ({ logoSettings: { ...state.logoSettings, ...s } })),
   setSettings: (s) => set((state) => ({ settings: { ...state.settings, ...s } })),
   setSubtitleStyle: (s) => set((state) => ({ subtitleStyle: { ...state.subtitleStyle, ...s } })),

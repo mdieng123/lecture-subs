@@ -1,17 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { useProjectStore } from '../state/projectStore'
-import { useClipsStore } from '../state/clipsStore'
+import { useSegmentsStore } from '../state/segmentsStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import { serializeSrt, formatDuration } from '../utils'
-import type { Clip, Cue } from '../types'
+import type { VideoSegment, Cue } from '../types'
 
 const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22, xl: 30, xxl: 40 }
 
-export default function ClipsScreen() {
+export default function YoutubeScreen() {
   const setScreen = useProjectStore((s) => s.setScreen)
   const project = useProjectStore((s) => s.project)
-  const { clips, detecting, error, isDirty, savedFilePath, returnScreen, markSaved, toggleClip, selectAll, deselectAll } = useClipsStore()
-  const selected = clips.filter((c) => c.selected)
+  const { segments, detecting, error, isDirty, savedFilePath, returnScreen, markSaved, toggleSegment, selectAll, deselectAll } = useSegmentsStore()
+  const selected = segments.filter((s) => s.selected)
   const [exporting, setExporting] = useState(false)
   const [exportDone, setExportDone] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -21,17 +21,17 @@ export default function ClipsScreen() {
   async function handleSave() {
     setSaving(true)
     try {
-      const defaultName = project?.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'clips'
+      const defaultName = project?.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'segments'
       const savePath = savedFilePath ?? await window.api.files.saveFile({
-        defaultPath: `${defaultName}.lectureclips`,
-        filters: [{ name: 'LectureSubs Clips', extensions: ['lectureclips'] }],
+        defaultPath: `${defaultName}.lecturesegments`,
+        filters: [{ name: 'LectureSubs Segments', extensions: ['lecturesegments'] }],
       })
       if (!savePath) return
       const data = JSON.stringify({
         version: 1,
         videoPath: project?.videoPath,
         projectFilePath: project?.projectFilePath ?? null,
-        clips,
+        segments,
       })
       await window.api.files.writeFile(savePath, data)
       markSaved(savePath)
@@ -49,15 +49,15 @@ export default function ClipsScreen() {
   }
 
   async function handleExport() {
-    const toExport = clips.filter((c) => c.selected)
+    const toExport = segments.filter((s) => s.selected)
     if (!toExport.length) return
 
     const baseFolder = await window.api.files.pickFolder()
     if (!baseFolder) return
 
-    const videoName = useProjectStore.getState().project?.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'clips'
-    const safeName = videoName.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
-    const folder = `${baseFolder}/Clips - ${safeName}`
+    const videoName = useProjectStore.getState().project?.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'segments'
+    const safeFolderName = videoName.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
+    const folder = `${baseFolder}/Segments - ${safeFolderName}`
     await window.api.files.mkdir(folder)
     setExporting(true)
     setExportError(null)
@@ -65,24 +65,24 @@ export default function ClipsScreen() {
     try {
       const tmpDir = await window.api.files.getTmpDir()
       for (let i = 0; i < toExport.length; i++) {
-        const clip = toExport[i]
-        const srtContent = serializeSrt(clip.cues, false)
-        const srtPath = `${tmpDir}/clip_${i}.srt`
+        const seg = toExport[i]
+        const srtContent = serializeSrt(seg.cues, false)
+        const srtPath = `${tmpDir}/seg_${i}.srt`
         await window.api.files.writeFile(srtPath, srtContent)
 
-        const safeName = clip.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
-        const outputPath = `${folder}${safeName}_${i + 1}.mp4`
+        const safeTitle = seg.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
+        const outputPath = `${folder}/${String(i + 1).padStart(2, '0')}_${safeTitle}.mp4`
 
         const logo = useProjectStore.getState().logoSettings
         const style = useProjectStore.getState().subtitleStyle
-        await window.api.ffmpeg.exportClip(
+        await window.api.ffmpeg.exportSegment(
           useProjectStore.getState().project!.videoPath,
           srtPath,
-          clip.startSeconds,
-          clip.endSeconds - clip.startSeconds,
+          seg.startSeconds,
+          seg.endSeconds - seg.startSeconds,
           outputPath,
           {
-            fontSize: FONT_SIZE_PX[style.fontSize] ?? 18,
+            fontSize: FONT_SIZE_PX[style.fontSize] ?? 22,
             position: style.position,
             background: style.background,
             ...(logo.enabled && logo.path ? { logoPath: logo.path, logoPosition: logo.position, logoSize: logo.size, logoOpacity: logo.opacity } : {}),
@@ -101,7 +101,7 @@ export default function ClipsScreen() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <div className="w-8 h-8 border-2 border-[hsl(210,80%,55%)] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[hsl(215,15%,55%)] text-sm">Analyzing transcript for clip-worthy moments...</p>
+        <p className="text-[hsl(215,15%,55%)] text-sm">Analyzing lecture and splitting into YouTube segments...</p>
       </div>
     )
   }
@@ -111,7 +111,7 @@ export default function ClipsScreen() {
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <p className="text-red-400 text-sm">{error}</p>
         <button onClick={() => setScreen(returnScreen)} className="text-sm text-[hsl(215,15%,55%)] hover:text-white">
-          ← Back to Editor
+          ← Back
         </button>
       </div>
     )
@@ -125,8 +125,8 @@ export default function ClipsScreen() {
           <button onClick={handleBack} className="text-[hsl(215,15%,50%)] hover:text-white text-sm">
             ← Back
           </button>
-          <span className="text-sm font-medium">Intelligent Clips</span>
-          <span className="text-xs text-[hsl(215,15%,45%)]">{clips.length} clips found</span>
+          <span className="text-sm font-medium">YouTube Segments</span>
+          <span className="text-xs text-[hsl(215,15%,45%)]">{segments.length} segments</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={selectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">Select all</button>
@@ -136,7 +136,7 @@ export default function ClipsScreen() {
             disabled={saving || !isDirty}
             className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] disabled:opacity-40 transition-colors"
           >
-            {saving ? 'Saving...' : isDirty ? 'Save clips' : 'Saved'}
+            {saving ? 'Saving...' : isDirty ? 'Save segments' : 'Saved'}
           </button>
           {exportDone ? (
             <span className="text-xs text-green-400 px-3">Exported!</span>
@@ -146,7 +146,7 @@ export default function ClipsScreen() {
               disabled={exporting || selected.length === 0}
               className="px-4 py-1.5 text-sm rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {exporting ? 'Exporting...' : `Export ${selected.length} clip${selected.length !== 1 ? 's' : ''}`}
+              {exporting ? 'Exporting...' : `Export ${selected.length} segment${selected.length !== 1 ? 's' : ''}`}
             </button>
           )}
         </div>
@@ -155,9 +155,9 @@ export default function ClipsScreen() {
       {showBackWarning && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-[hsl(222,20%,14%)] border border-[hsl(220,15%,22%)] rounded-xl p-6 w-[400px] shadow-2xl flex flex-col gap-4">
-            <h3 className="text-base font-semibold">Unsaved clips</h3>
+            <h3 className="text-base font-semibold">Unsaved segments</h3>
             <p className="text-sm text-[hsl(215,15%,60%)] leading-relaxed">
-              These clips haven't been saved. If you go back and regenerate clips later, the AI will produce different results — you'll lose these specific clips.
+              These segments haven't been saved. If you go back and regenerate later, the AI will produce different results.
             </p>
             <div className="flex gap-2 justify-end">
               <button
@@ -191,11 +191,11 @@ export default function ClipsScreen() {
         </div>
       )}
 
-      {/* Clips grid */}
+      {/* Segments grid — 2 columns for 16:9 */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-3 gap-4">
-          {clips.map((clip) => (
-            <ClipCard key={clip.id} clip={clip} />
+        <div className="grid grid-cols-2 gap-4">
+          {segments.map((seg) => (
+            <SegmentCard key={seg.id} segment={seg} />
           ))}
         </div>
       </div>
@@ -203,8 +203,8 @@ export default function ClipsScreen() {
   )
 }
 
-function ClipCard({ clip }: { clip: Clip }) {
-  const { toggleClip, updateClipCue, mergeClipCues, deleteClipCue, extendClip, trimClip } = useClipsStore()
+function SegmentCard({ segment }: { segment: VideoSegment }) {
+  const { toggleSegment, updateSegmentCue, mergeSegmentCues, deleteSegmentCue, extendSegment, trimSegment } = useSegmentsStore()
   const allCues = useProjectStore((s) => s.project?.cues ?? [])
   const project = useProjectStore((s) => s.project)
   const subtitleStyle = useProjectStore((s) => s.subtitleStyle)
@@ -215,8 +215,8 @@ function ClipCard({ clip }: { clip: Clip }) {
   const [playing, setPlaying] = useState(false)
   const [relativeTime, setRelativeTime] = useState(0)
 
-  const duration = clip.endSeconds - clip.startSeconds
-  const activeCue = clip.cues.find((c) => relativeTime >= c.startSeconds && relativeTime < c.endSeconds) ?? null
+  const duration = segment.endSeconds - segment.startSeconds
+  const activeCue = segment.cues.find((c) => relativeTime >= c.startSeconds && relativeTime < c.endSeconds) ?? null
 
   const FONT_SIZE_CLASS: Record<string, string> = { small: 'text-xs', medium: 'text-sm', large: 'text-base', xl: 'text-xl', xxl: 'text-3xl' }
   const BG_CLASS: Record<string, string> = { none: '', semi: 'bg-black/60', solid: 'bg-black/85' }
@@ -226,22 +226,22 @@ function ClipCard({ clip }: { clip: Clip }) {
   useEffect(() => {
     const el = videoRef.current
     if (!el) return
-    el.currentTime = clip.startSeconds
+    el.currentTime = segment.startSeconds
 
     function tick() {
-      if (el!.currentTime >= clip.endSeconds) {
+      if (el!.currentTime >= segment.endSeconds) {
         el!.pause()
-        el!.currentTime = clip.startSeconds
+        el!.currentTime = segment.startSeconds
         setPlaying(false)
         setRelativeTime(0)
       } else {
-        setRelativeTime(Math.max(0, el!.currentTime - clip.startSeconds))
+        setRelativeTime(Math.max(0, el!.currentTime - segment.startSeconds))
       }
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
-  }, [clip.startSeconds, clip.endSeconds])
+  }, [segment.startSeconds, segment.endSeconds])
 
   function togglePlay() {
     const el = videoRef.current
@@ -255,9 +255,9 @@ function ClipCard({ clip }: { clip: Clip }) {
     : project?.videoPath ?? ''
 
   return (
-    <div className={`flex flex-col rounded-lg border transition-colors ${clip.selected ? 'border-[hsl(210,60%,45%)] bg-[hsl(222,20%,14%)]' : 'border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)]'}`}>
-      {/* 9:16 video preview */}
-      <div className="relative cursor-pointer" style={{ aspectRatio: '9/16', overflow: 'hidden', borderRadius: '0.5rem 0.5rem 0 0' }} onClick={togglePlay}>
+    <div className={`flex flex-col rounded-lg border transition-colors ${segment.selected ? 'border-[hsl(210,60%,45%)] bg-[hsl(222,20%,14%)]' : 'border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)]'}`}>
+      {/* 16:9 video preview */}
+      <div className="relative cursor-pointer" style={{ aspectRatio: '16/9', overflow: 'hidden', borderRadius: '0.5rem 0.5rem 0 0' }} onClick={togglePlay}>
         <video
           ref={videoRef}
           src={videoSrc}
@@ -283,7 +283,7 @@ function ClipCard({ clip }: { clip: Clip }) {
             onChange={(e) => {
               const t = parseFloat(e.target.value)
               setRelativeTime(t)
-              if (videoRef.current) videoRef.current.currentTime = clip.startSeconds + t
+              if (videoRef.current) videoRef.current.currentTime = segment.startSeconds + t
             }}
             className="w-full h-1 accent-[hsl(210,80%,55%)]"
           />
@@ -311,11 +311,11 @@ function ClipCard({ clip }: { clip: Clip }) {
           <img
             src={`file://${logo.path}`}
             className={`absolute pointer-events-none ${
-              logo.size === 'small' ? 'w-[10%]' : logo.size === 'large' ? 'w-[22%]' : 'w-[15%]'
+              logo.size === 'small' ? 'w-[8%]' : logo.size === 'large' ? 'w-[18%]' : 'w-[12%]'
             } ${
               logo.position === 'top-left' ? 'top-2 left-2' :
               logo.position === 'top-right' ? 'top-2 right-2' :
-              logo.position === 'bottom-left' ? 'bottom-10 left-2' : 'bottom-10 right-2'
+              logo.position === 'bottom-left' ? 'bottom-8 left-2' : 'bottom-8 right-2'
             }`}
             style={{ opacity: (logo.opacity ?? 100) / 100 }}
             alt=""
@@ -332,18 +332,18 @@ function ClipCard({ clip }: { clip: Clip }) {
         {/* Selected checkbox */}
         <div
           className="absolute top-2 left-2"
-          onClick={(e) => { e.stopPropagation(); toggleClip(clip.id) }}
+          onClick={(e) => { e.stopPropagation(); toggleSegment(segment.id) }}
         >
-          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center text-xs font-bold transition-colors ${clip.selected ? 'bg-[hsl(210,80%,55%)] border-[hsl(210,80%,55%)] text-white' : 'bg-black/50 border-white/50'}`}>
-            {clip.selected ? '✓' : ''}
+          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center text-xs font-bold transition-colors ${segment.selected ? 'bg-[hsl(210,80%,55%)] border-[hsl(210,80%,55%)] text-white' : 'bg-black/50 border-white/50'}`}>
+            {segment.selected ? '✓' : ''}
           </div>
         </div>
       </div>
 
       {/* Info */}
       <div className="px-3 py-2 flex flex-col gap-1">
-        <p className="text-sm font-medium leading-tight">{clip.title}</p>
-        <p className="text-xs text-[hsl(215,15%,50%)] leading-snug">{clip.reason}</p>
+        <p className="text-sm font-medium leading-tight">{segment.title}</p>
+        <p className="text-xs text-[hsl(215,15%,50%)] leading-snug">{segment.topicSummary}</p>
       </div>
 
       {/* Edit subtitles toggle */}
@@ -351,39 +351,39 @@ function ClipCard({ clip }: { clip: Clip }) {
         onClick={() => setExpanded((v) => !v)}
         className="mx-3 mb-2 px-2 py-1 text-xs rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,55%)] hover:text-white hover:border-[hsl(220,15%,35%)] transition-colors text-left"
       >
-        {expanded ? '▲ Hide subtitles' : `▼ Edit subtitles (${clip.cues.length})`}
+        {expanded ? '▲ Hide subtitles' : `▼ Edit subtitles (${segment.cues.length})`}
       </button>
 
       {/* Extend / trim controls */}
       {allCues.length === 0 ? (
         <p className="mx-3 mb-2 text-[10px] text-[hsl(215,15%,38%)] italic">
-          Open via .lecturesubs to extend or trim clip boundaries
+          Open via .lecturesubs to extend or trim segment boundaries
         </p>
       ) : (
         <div className="mx-3 mb-2 grid grid-cols-2 gap-1">
           <button
-            onClick={() => extendClip(clip.id, 'start', allCues)}
-            title="Prepend one cue before clip start"
+            onClick={() => extendSegment(segment.id, 'start', allCues)}
+            title="Prepend one cue before segment start"
             className="px-2 py-1 text-[10px] rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,55%)] hover:text-green-400 hover:border-green-700 transition-colors"
           >
             ← +cue start
           </button>
           <button
-            onClick={() => extendClip(clip.id, 'end', allCues)}
-            title="Append one cue after clip end"
+            onClick={() => extendSegment(segment.id, 'end', allCues)}
+            title="Append one cue after segment end"
             className="px-2 py-1 text-[10px] rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,55%)] hover:text-green-400 hover:border-green-700 transition-colors"
           >
             +cue end →
           </button>
           <button
-            onClick={() => trimClip(clip.id, 'start')}
+            onClick={() => trimSegment(segment.id, 'start')}
             title="Remove first cue"
             className="px-2 py-1 text-[10px] rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,55%)] hover:text-red-400 hover:border-red-800 transition-colors"
           >
             → −cue start
           </button>
           <button
-            onClick={() => trimClip(clip.id, 'end')}
+            onClick={() => trimSegment(segment.id, 'end')}
             title="Remove last cue"
             className="px-2 py-1 text-[10px] rounded border border-[hsl(220,15%,25%)] text-[hsl(215,15%,55%)] hover:text-red-400 hover:border-red-800 transition-colors"
           >
@@ -394,15 +394,15 @@ function ClipCard({ clip }: { clip: Clip }) {
 
       {expanded && (
         <div className="mx-3 mb-3 max-h-72 overflow-y-auto flex flex-col gap-1.5">
-          {clip.cues.map((cue, idx) => (
-            <ClipCueRow
+          {segment.cues.map((cue, idx) => (
+            <SegmentCueRow
               key={cue.id}
               cue={cue}
-              isLast={idx === clip.cues.length - 1}
-              onUpdate={(patch) => updateClipCue(clip.id, cue.id, patch)}
-              onMerge={() => mergeClipCues(clip.id, cue.id)}
-              onDelete={() => deleteClipCue(clip.id, cue.id)}
-              onSeek={() => { if (videoRef.current) { videoRef.current.currentTime = clip.startSeconds + cue.startSeconds } }}
+              isLast={idx === segment.cues.length - 1}
+              onUpdate={(patch) => updateSegmentCue(segment.id, cue.id, patch)}
+              onMerge={() => mergeSegmentCues(segment.id, cue.id)}
+              onDelete={() => deleteSegmentCue(segment.id, cue.id)}
+              onSeek={() => { if (videoRef.current) { videoRef.current.currentTime = segment.startSeconds + cue.startSeconds } }}
             />
           ))}
         </div>
@@ -411,7 +411,7 @@ function ClipCard({ clip }: { clip: Clip }) {
   )
 }
 
-function ClipCueRow({ cue, isLast, onUpdate, onMerge, onDelete, onSeek }: {
+function SegmentCueRow({ cue, isLast, onUpdate, onMerge, onDelete, onSeek }: {
   cue: Cue
   isLast: boolean
   onUpdate: (patch: Partial<Omit<Cue, 'id'>>) => void

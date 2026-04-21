@@ -28,10 +28,15 @@ interface ClipsStore {
   clips: Clip[]
   detecting: boolean
   error: string | null
+  isDirty: boolean
+  savedFilePath: string | null
+  returnScreen: 'editor' | 'import'
 
   setClips: (clips: Clip[]) => void
   setDetecting: (v: boolean) => void
   setError: (e: string | null) => void
+  markSaved: (filePath: string) => void
+  setReturnScreen: (s: 'editor' | 'import') => void
   toggleClip: (id: string) => void
   selectAll: () => void
   deselectAll: () => void
@@ -47,19 +52,26 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
   clips: [],
   detecting: false,
   error: null,
+  isDirty: false,
+  savedFilePath: null,
+  returnScreen: 'editor',
 
-  setClips: (clips) => set({ clips }),
+  setClips: (clips) => set({ clips, isDirty: true }),
   setDetecting: (v) => set({ detecting: v }),
   setError: (e) => set({ error: e }),
+  markSaved: (filePath) => set({ isDirty: false, savedFilePath: filePath }),
+  setReturnScreen: (s) => set({ returnScreen: s }),
 
   toggleClip: (id) => set((s) => ({
     clips: s.clips.map((c) => c.id === id ? { ...c, selected: !c.selected } : c),
+    isDirty: true,
   })),
 
-  selectAll: () => set((s) => ({ clips: s.clips.map((c) => ({ ...c, selected: true })) })),
-  deselectAll: () => set((s) => ({ clips: s.clips.map((c) => ({ ...c, selected: false })) })),
+  selectAll: () => set((s) => ({ clips: s.clips.map((c) => ({ ...c, selected: true })), isDirty: true })),
+  deselectAll: () => set((s) => ({ clips: s.clips.map((c) => ({ ...c, selected: false })), isDirty: true })),
 
   updateClipCue: (clipId, cueId, patch) => set((s) => ({
+    isDirty: true,
     clips: s.clips.map((c) =>
       c.id !== clipId ? c : {
         ...c,
@@ -84,6 +96,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
       edited: true,
     }
     set((s) => ({
+      isDirty: true,
       clips: s.clips.map((c) =>
         c.id !== clipId ? c : {
           ...c,
@@ -94,6 +107,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
   },
 
   deleteClipCue: (clipId, cueId) => set((s) => ({
+    isDirty: true,
     clips: s.clips.map((c) =>
       c.id !== clipId ? c : { ...c, cues: c.cues.filter((cue) => cue.id !== cueId) }
     ),
@@ -109,7 +123,6 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
       const next = allCues.find((c) => c.startSeconds >= clip.endSeconds - 0.1 && c.startSeconds >= clip.endSeconds - 1)
         ?? allCues.find((c) => c.startSeconds >= clip.endSeconds - 0.5)
         ?? allCues.find((c) => c.startSeconds > clip.endSeconds - 2)
-      const nextCues = allCues.filter((c) => c.startSeconds >= clip.endSeconds - 0.1 && c.endSeconds <= (next?.endSeconds ?? 0) + 0.1)
       if (!next) return
       const newEnd = next.endSeconds
       const dur = newEnd - clip.startSeconds
@@ -120,6 +133,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
         endSeconds: +Math.min(dur, next.endSeconds - clip.startSeconds).toFixed(3),
       }]
       set((s) => ({
+        isDirty: true,
         clips: s.clips.map((c) => c.id !== clipId ? c : {
           ...c,
           endSeconds: newEnd,
@@ -139,6 +153,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
         endSeconds: +shift.toFixed(3),
       }
       set((s) => ({
+        isDirty: true,
         clips: s.clips.map((c) => c.id !== clipId ? c : {
           ...c,
           startSeconds: newStart,
@@ -161,6 +176,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
     if (direction === 'end') {
       const last = clip.cues[clip.cues.length - 1]
       set((s) => ({
+        isDirty: true,
         clips: s.clips.map((c) => c.id !== clipId ? c : {
           ...c,
           endSeconds: clip.startSeconds + last.startSeconds,
@@ -171,6 +187,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
       const first = clip.cues[0]
       const shift = first.endSeconds
       set((s) => ({
+        isDirty: true,
         clips: s.clips.map((c) => c.id !== clipId ? c : {
           ...c,
           startSeconds: clip.startSeconds + first.endSeconds,
@@ -184,7 +201,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
     }
   },
 
-  reset: () => set({ clips: [], detecting: false, error: null }),
+  reset: () => set({ clips: [], detecting: false, error: null, isDirty: false, savedFilePath: null, returnScreen: 'editor' }),
 }))
 
 export function buildClipsFromSuggestions(

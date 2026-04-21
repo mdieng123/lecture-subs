@@ -19,6 +19,9 @@ export default function ProcessingScreen() {
   const [logOpen, setLogOpen] = useState(false)
   const [cancelled, setCancelled] = useState(false)
   const [partialCues, setPartialCues] = useState<Cue[] | null>(null)
+  const [rateLimitSecsLeft, setRateLimitSecsLeft] = useState<number | null>(null)
+  const [rateLimitInfo, setRateLimitInfo] = useState<{ used: number; limit: number; requested: number } | null>(null)
+  const rateLimitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const videoPathRef = useRef<string | null>(null)
   const durationRef = useRef(0)
   const tmpDirRef = useRef<string | null>(null)
@@ -42,7 +45,7 @@ export default function ProcessingScreen() {
       }
     })
     const removeChunkProgress = window.api.gemini.onChunkProgress((data: unknown) => {
-      const d = data as { chunkIndex?: number; totalChunks?: number; status?: string; retryInMs?: number }
+      const d = data as { chunkIndex?: number; totalChunks?: number; status?: string; retryInMs?: number; used?: number; limit?: number; requested?: number }
       if (d.status === 'transcribing') {
         setProcessing((prev) => prev ? {
           ...prev,
@@ -50,9 +53,31 @@ export default function ProcessingScreen() {
           totalChunks: d.totalChunks ?? prev.totalChunks,
         } : prev)
         addLog(`Transcribing chunk ${(d.chunkIndex ?? 0) + 1}/${d.totalChunks ?? '?'}...`)
+        setRateLimitSecsLeft(null)
+        setRateLimitInfo(null)
+        if (rateLimitTimerRef.current) { clearInterval(rateLimitTimerRef.current); rateLimitTimerRef.current = null }
+      } else if (d.status === 'quota_exhausted') {
+        if (d.used && d.limit) setRateLimitInfo({ used: d.used, limit: d.limit, requested: d.requested ?? 0 })
+        setRateLimitSecsLeft(null)
+        if (rateLimitTimerRef.current) { clearInterval(rateLimitTimerRef.current); rateLimitTimerRef.current = null }
       } else if (d.status === 'waiting') {
         const secs = Math.ceil((d.retryInMs ?? 1000) / 1000)
         addLog(`Rate limit — waiting ${secs}s to retry chunk ${(d.chunkIndex ?? 0) + 1}...`)
+        if (d.used && d.limit && d.requested) {
+          setRateLimitInfo({ used: d.used, limit: d.limit, requested: d.requested })
+        }
+        if (rateLimitTimerRef.current) clearInterval(rateLimitTimerRef.current)
+        setRateLimitSecsLeft(secs)
+        rateLimitTimerRef.current = setInterval(() => {
+          setRateLimitSecsLeft((prev) => {
+            if (prev === null || prev <= 1) {
+              clearInterval(rateLimitTimerRef.current!)
+              rateLimitTimerRef.current = null
+              return null
+            }
+            return prev - 1
+          })
+        }, 1000)
       }
     })
     return () => { removeProgress(); removeChunkProgress() }
@@ -119,6 +144,10 @@ export default function ProcessingScreen() {
         cursor = splitPoint
       }
 
+      const GROQ_HOURLY_LIMIT = 7200
+      if (totalDuration > GROQ_HOURLY_LIMIT * 0.6) {
+        addLog(`⚠ Video is ${(totalDuration / 60).toFixed(0)} min. Groq allows ~${(GROQ_HOURLY_LIMIT / 60).toFixed(0)} min of audio per hour — repeated runs on long videos exhaust this quickly.`)
+      }
       addLog(`Processing ${chunks.length} chunk(s)...`)
       setProcessing((prev) => prev ? { ...prev, totalChunks: chunks.length } : prev)
 
@@ -129,7 +158,7 @@ export default function ProcessingScreen() {
       async function processChunk(i: number) {
         if (cancelled) return
         const chunk = chunks[i]
-        const chunkPath = `${tmpDir}/chunk-${i}.flac`
+        const chunkPath = `${tmpDir}/chunk-${i}.mp3`
         await window.api.ffmpeg.splitAudio(audioPath, chunk.start, chunk.duration, chunkPath)
         const result = await window.api.gemini.transcribeChunk(
           chunkPath, i, chunks.length, chunk.offsetSeconds
@@ -211,7 +240,9 @@ export default function ProcessingScreen() {
       })
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      const isQuota = msg.includes('QUOTA_EXHAUSTED') || msg.includes('QUOTA_ALREADY_EXHAUSTED')
+      if (!isQuota) setError(msg)
     }
   }
 
@@ -286,6 +317,31 @@ export default function ProcessingScreen() {
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Per-chunk rate limit banner (minor, auto-retrying) */}
+        {rateLimitSecsLeft !== null && (
+          <div className="px-4 py-4 bg-amber-900/30 border border-amber-700/50 rounded-lg text-amber-300 text-sm space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="font-medium">Groq rate limit reached</div>
+              <div className="text-2xl font-mono font-bold tabular-nums flex-shrink-0 leading-none">{rateLimitSecsLeft}s</div>
+            </div>
+            {rateLimitInfo && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-amber-400/90">
+                  <span>Quota used this hour</span>
+                  <span className="font-mono">{Math.round(rateLimitInfo.used / 60)} / {Math.round(rateLimitInfo.limit / 60)} min</span>
+                </div>
+                <div className="w-full h-1.5 bg-amber-900/60 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, rateLimitInfo.used / rateLimitInfo.limit * 100).toFixed(1)}%` }} />
+                </div>
+                <div className="text-xs text-amber-400/70">
+                  This chunk needs {Math.round(rateLimitInfo.requested / 60)} min — only {Math.round((rateLimitInfo.limit - rateLimitInfo.used) / 60)} min left. Quota resets on a rolling 1-hour window.
+                </div>
+              </div>
+            )}
+            <div className="text-xs text-amber-400/70">Retrying automatically when quota clears — or cancel and come back in {rateLimitSecsLeft > 60 ? `${Math.ceil(rateLimitSecsLeft / 60)} min` : `${rateLimitSecsLeft}s`}.</div>
           </div>
         )}
 

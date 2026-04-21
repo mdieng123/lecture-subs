@@ -97,7 +97,8 @@ ipcMain.handle('ffmpeg:splitAudio', (
       .setDuration(duration)
       .audioChannels(1)
       .audioFrequency(16000)
-      .audioCodec('flac')
+      .audioCodec('libmp3lame')
+      .audioBitrate('64k')
       .output(outputPath)
       .on('end', () => resolve(outputPath))
       .on('error', reject)
@@ -151,6 +152,70 @@ ipcMain.handle('ffmpeg:exportClip', (
       cmd.videoFilters(['crop=ih*9/16:ih', subtitleFilter])
         .videoCodec('libx264').audioCodec('aac')
         .outputOptions(['-preset medium', '-crf 22', '-pix_fmt yuv420p'])
+    }
+
+    cmd.output(outputPath)
+      .on('progress', (p) => sendProgress(win, { stage: 'export', percent: p.percent ?? 0 }))
+      .on('end', () => resolve(outputPath))
+      .on('error', reject)
+      .run()
+  })
+})
+
+ipcMain.handle('ffmpeg:exportSegment', (
+  _event,
+  videoPath: string,
+  srtPath: string,
+  startSeconds: number,
+  durationSeconds: number,
+  outputPath: string,
+  opts: {
+    fontSize?: number
+    position?: 'bottom' | 'center' | 'top'
+    background?: 'none' | 'semi' | 'solid'
+    logoPath?: string
+    logoPosition?: string
+    logoSize?: string
+    logoOpacity?: number
+  }
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const win = getMainWindow()
+    const fontSize = opts.fontSize ?? 22
+    const alignment = opts.position === 'top' ? 8 : opts.position === 'center' ? 5 : 2
+    const marginV = opts.position === 'center' ? 0 : 40
+    let borderStyle = '1'
+    let backColour = ''
+    if (opts.background === 'semi') { borderStyle = '4'; backColour = ',BackColour=&H80000000' }
+    else if (opts.background === 'solid') { borderStyle = '4'; backColour = ',BackColour=&HCC000000' }
+
+    const escapedSrt = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:')
+    const subtitleFilter = `subtitles=${escapedSrt}:force_style='FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
+
+    const cmd = ffmpeg(videoPath)
+      .setStartTime(startSeconds)
+      .setDuration(durationSeconds)
+
+    if (opts.logoPath && fs.existsSync(opts.logoPath)) {
+      const logoW = opts.logoSize === 'small' ? 80 : opts.logoSize === 'large' ? 200 : 130
+      const lx = opts.logoPosition?.includes('right') ? 'W-w-16' : '16'
+      const ly = opts.logoPosition?.includes('bottom') ? 'H-h-16' : '16'
+      const alpha = (opts.logoOpacity ?? 100) / 100
+      const logoScale = alpha < 1
+        ? `[1:v]scale=${logoW}:-1,format=rgba,colorchannelmixer=aa=${alpha}[logo]`
+        : `[1:v]scale=${logoW}:-1[logo]`
+      cmd.input(opts.logoPath)
+        .outputOptions([
+          '-filter_complex',
+          `[0:v]${subtitleFilter}[subbed];${logoScale};[subbed][logo]overlay=${lx}:${ly}`,
+          '-map', '0:a',
+          '-preset medium', '-crf 20', '-pix_fmt yuv420p',
+        ])
+        .videoCodec('libx264').audioCodec('aac')
+    } else {
+      cmd.videoFilters(subtitleFilter)
+        .videoCodec('libx264').audioCodec('aac')
+        .outputOptions(['-preset medium', '-crf 20', '-pix_fmt yuv420p'])
     }
 
     cmd.output(outputPath)

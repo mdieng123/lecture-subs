@@ -34,6 +34,7 @@ const api = {
     mkdir: (dirPath: string) => ipcRenderer.invoke('files:mkdir', dirPath),
     exists: (filePath: string) => ipcRenderer.invoke('files:exists', filePath),
     getDownloadsDir: () => ipcRenderer.invoke('files:getDownloadsDir'),
+    listDownloads: (): Promise<{ name: string; path: string; createdAt: number }[]> => ipcRenderer.invoke('files:listDownloads'),
     getDownloadsSize: () => ipcRenderer.invoke('files:getDownloadsSize'),
     clearDownloads: () => ipcRenderer.invoke('files:clearDownloads'),
     pickLogo: () => ipcRenderer.invoke('files:pickLogo'),
@@ -57,6 +58,8 @@ const api = {
       ipcRenderer.invoke('ffmpeg:exportHardSubs', videoPath, srtPath, outputPath, opts),
     exportClip: (videoPath: string, srtPath: string, startSeconds: number, durationSeconds: number, outputPath: string, opts: Record<string, unknown>) =>
       ipcRenderer.invoke('ffmpeg:exportClip', videoPath, srtPath, startSeconds, durationSeconds, outputPath, opts),
+    exportSegment: (videoPath: string, srtPath: string, startSeconds: number, durationSeconds: number, outputPath: string, opts: Record<string, unknown>) =>
+      ipcRenderer.invoke('ffmpeg:exportSegment', videoPath, srtPath, startSeconds, durationSeconds, outputPath, opts),
     onProgress: (callback: (data: unknown) => void) => {
       const handler = (_: Electron.IpcRendererEvent, data: unknown) => callback(data)
       ipcRenderer.on('ffmpeg:progress', handler)
@@ -70,6 +73,7 @@ const api = {
       ipcRenderer.invoke('gemini:transcribeChunk', audioPath, chunkIndex, totalChunks, offsetSeconds),
     cancelProcessing: () => ipcRenderer.invoke('gemini:cancelProcessing'),
     detectClips: (transcript: string) => ipcRenderer.invoke('gemini:detectClips', transcript),
+    detectSegments: (transcript: string, durationRange: string) => ipcRenderer.invoke('gemini:detectSegments', transcript, durationRange),
     onChunkProgress: (callback: (data: unknown) => void) => {
       const handler = (_: Electron.IpcRendererEvent, data: unknown) => callback(data)
       ipcRenderer.on('gemini:chunkProgress', handler)
