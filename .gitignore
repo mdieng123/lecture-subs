@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+release/
+out/
+*.tsbuildinfo
+
+# Platform binary — downloaded automatically by postinstall
+bin/
+
+# Environment / secrets — NEVER commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# Dev/test files
+test-*.mjs
+testlectureclip.mov
+BUILD_LOG.md
+subtitleAppSpec.md
+test-fixtures/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
