@@ -1,13 +1,16 @@
 import { useState, useRef, useCallback } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import { useSegmentsStore, buildSegmentsFromSuggestions } from '../state/segmentsStore'
+import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
+import { runScrutinize } from '../utils'
 import type { SegmentDurationRange } from '../types'
 import VideoPreview from './VideoPreview'
 import CueList from './CueList'
 import SubtitleTimeline from './SubtitleTimeline'
 import ExportDialog from './ExportDialog'
 import SettingsDialog from './SettingsDialog'
+import ReviewPanel from './ReviewPanel'
 
 export default function EditorScreen() {
   const project = useProjectStore((s) => s.project)
@@ -15,6 +18,7 @@ export default function EditorScreen() {
   const undo = useProjectStore((s) => s.undo)
   const redo = useProjectStore((s) => s.redo)
   const clearProject = useProjectStore((s) => s.clearProject)
+  const updateCue = useProjectStore((s) => s.updateCue)
   const setProjectFilePath = useProjectStore((s) => s.setProjectFilePath)
   const [currentTime, setCurrentTime] = useState(0)
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null)
@@ -24,6 +28,7 @@ export default function EditorScreen() {
   const [segmentModalOpen, setSegmentModalOpen] = useState(false)
   const [durationRange, setDurationRange] = useState<SegmentDurationRange>('7-10')
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const reviewStore = useReviewStore()
 
   const handleSeek = useCallback((time: number) => {
     if (videoRef.current) {
@@ -33,7 +38,8 @@ export default function EditorScreen() {
 
   async function handleSave() {
     if (!project) return
-    const data = JSON.stringify({ ...project, history: [], future: [] })
+    const reviewIssues = useReviewStore.getState().issues
+    const data = JSON.stringify({ ...project, history: [], future: [], reviewIssues })
     const filePath = await window.api.files.saveProject(data, project.projectFilePath)
     if (filePath) {
       if (!project.projectFilePath) setProjectFilePath(filePath)
@@ -52,6 +58,25 @@ export default function EditorScreen() {
       redo()
     }
   }, [undo, redo])
+
+  async function handleReview() {
+    if (!project) return
+    const currentStatus = useReviewStore.getState().status
+    if (currentStatus === 'done' || currentStatus === 'analyzing') { reviewStore.setOpen(true); return }
+    const sid = reviewStore.startSession()
+    reviewStore.setOpen(true)
+    reviewStore.setStatus('analyzing')
+    try {
+      const issues = await runScrutinize(project.cues.map((c) => ({ id: c.id, arabic: c.arabic ?? '', english: c.english })))
+      if (useReviewStore.getState().sessionId !== sid) return
+      reviewStore.setIssues(issues)
+      reviewStore.setStatus('done')
+    } catch (err) {
+      if (useReviewStore.getState().sessionId !== sid) return
+      reviewStore.setError(err instanceof Error ? err.message : String(err))
+      reviewStore.setStatus('error')
+    }
+  }
 
   async function handleGenerateSegments() {
     if (!project) return
@@ -90,6 +115,7 @@ export default function EditorScreen() {
           <button
             onClick={() => {
               if (confirm('Close project? Unsaved changes will be lost.')) {
+                reviewStore.reset()
                 clearProject()
               }
             }}
@@ -123,6 +149,18 @@ export default function EditorScreen() {
           >
             Redo
           </button>
+          <button
+            onClick={handleReview}
+            className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
+            title="AI review of transcript for errors"
+          >
+            {reviewStore.status === 'analyzing' ? 'Reviewing...' : 'Review'}
+            {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
+                {reviewStore.issues.filter((i) => i.status === 'pending').length}
+              </span>
+            )}
+          </button>
           {project.durationSeconds >= 1500 && (
             <button
               onClick={() => setSegmentModalOpen(true)}
@@ -131,12 +169,19 @@ export default function EditorScreen() {
               YouTube Videos
             </button>
           )}
-          <button
-            onClick={() => setExportOpen(true)}
-            className="px-4 py-1.5 text-sm rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white font-medium transition-colors"
-          >
-            Export
-          </button>
+          <div className="flex items-center gap-2">
+            {reviewStore.status !== 'done' && reviewStore.issues.length === 0 && (
+              <span className="text-[11px] text-amber-400/80" title="Run a review before exporting to catch transcription or translation issues">
+                ⚠ Not reviewed
+              </span>
+            )}
+            <button
+              onClick={() => setExportOpen(true)}
+              className="px-4 py-1.5 text-sm rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white font-medium transition-colors"
+            >
+              Export
+            </button>
+          </div>
           <button
             onClick={() => setSettingsOpen(true)}
             className="p-1.5 rounded hover:bg-[hsl(222,20%,20%)] text-[hsl(215,15%,55%)] hover:text-white transition-colors"
@@ -194,6 +239,16 @@ export default function EditorScreen() {
 
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {reviewStore.open && (
+        <ReviewPanel
+          videoPath={project.videoPath}
+          getAbsoluteTime={(cueId) => project.cues.find((c) => c.id === cueId)?.startSeconds}
+          onClose={() => reviewStore.setOpen(false)}
+          onRerun={() => { reviewStore.reset(); handleReview() }}
+          getCue={(id) => project.cues.find((c) => c.id === id)}
+          onApplyFix={(cueId, patch) => updateCue(cueId, patch)}
+        />
+      )}
 
       {segmentModalOpen && (
         <SegmentDurationModal

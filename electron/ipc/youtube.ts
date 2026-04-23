@@ -89,7 +89,11 @@ ipcMain.handle('youtube:download', (_event, url: string, outputDir: string): Pro
         return reject(new Error('Download completed but output file not found.'))
       }
 
-      resolve({ filePath, title: title || path.basename(filePath, path.extname(filePath)) })
+      const resolvedTitle = title || path.basename(filePath, path.extname(filePath))
+      try {
+        fs.writeFileSync(path.join(outputDir, 'metadata.json'), JSON.stringify({ title: resolvedTitle, url }))
+      } catch {}
+      resolve({ filePath, title: resolvedTitle })
     })
 
     proc.on('error', (err) => {

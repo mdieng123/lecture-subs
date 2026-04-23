@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import { useClipsStore } from '../state/clipsStore'
 import { useSegmentsStore } from '../state/segmentsStore'
+import { useReviewStore } from '../state/reviewStore'
 import SettingsDialog from './SettingsDialog'
 import { formatDuration } from '../utils'
 
@@ -29,7 +30,8 @@ export default function ImportScreen() {
   const [ytDownloading, setYtDownloading] = useState(false)
   const [, setYtProgress] = useState(0)
   const [ytStatus, setYtStatus] = useState('')
-  const [downloads, setDownloads] = useState<{ name: string; path: string; createdAt: number }[]>([])
+  const [downloads, setDownloads] = useState<{ name: string; path: string; createdAt: number; url?: string }[]>([])
+  const [pendingRestore, setPendingRestore] = useState<{ type: 'clips' | 'segments'; rawJson: string; filePath: string; youtubeUrl: string } | null>(null)
   const cancelRef = useRef(false)
 
   function refreshDownloads() {
@@ -63,7 +65,7 @@ export default function ImportScreen() {
       const ytDir = `${downloadsDir}/yt-${Date.now()}`
       const { filePath, title } = await window.api.youtube.download(url, ytDir)
       if (cancelRef.current) return
-      await loadVideo(filePath, title)
+      await loadVideo(filePath, title, url)
       refreshDownloads()
     } catch (err) {
       if (!cancelRef.current) {
@@ -83,7 +85,7 @@ export default function ImportScreen() {
     setYtProgress(0)
   }
 
-  async function loadVideo(filePath: string, title?: string) {
+  async function loadVideo(filePath: string, title?: string, youtubeUrl?: string) {
     setLoadError(null)
     try {
       const { duration, hasAudio } = await window.api.ffmpeg.getVideoDuration(filePath)
@@ -93,6 +95,9 @@ export default function ImportScreen() {
       }
       const name = title ?? filePath.split('/').pop() ?? filePath
       setVideoInfo({ path: filePath, name, size: 'unknown', duration })
+      if (youtubeUrl) {
+        useProjectStore.getState().setProject({ ...(useProjectStore.getState().project ?? {} as any), youtubeUrl })
+      }
       setTab('file')
     } catch (err) {
       setLoadError(`Could not read video: ${err instanceof Error ? err.message : String(err)}`)
@@ -105,7 +110,11 @@ export default function ImportScreen() {
       const videoExists = await window.api.files.exists(data.videoPath)
       let videoPath = data.videoPath
       if (!videoExists) {
-        setLoadError(`Video not found: "${data.videoPath.split('/').pop()}". Please locate it.`)
+        if (data.youtubeUrl) {
+          setPendingRestore({ type: 'clips', rawJson, filePath, youtubeUrl: data.youtubeUrl })
+          return
+        }
+        setLoadError(`Video not found: "${data.videoPath?.split('/').pop()}". Please locate it.`)
         const picked = await window.api.files.openAny()
         if (!picked || picked.endsWith('.lecturesubs') || picked.endsWith('.lectureclips')) {
           setLoadError('Could not locate video — clips not loaded.')
@@ -129,6 +138,12 @@ export default function ImportScreen() {
       useClipsStore.getState().setClips(data.clips ?? [])
       useClipsStore.getState().markSaved(filePath)
       useClipsStore.getState().setReturnScreen('import')
+      if (data.reviewIssues?.length) {
+        useReviewStore.getState().setIssues(data.reviewIssues)
+        useReviewStore.getState().setStatus('done')
+      } else {
+        useReviewStore.getState().reset()
+      }
       setScreen('clips')
     } catch {
       setLoadError('Failed to load clips file.')
@@ -141,7 +156,11 @@ export default function ImportScreen() {
       const videoExists = await window.api.files.exists(data.videoPath)
       let videoPath = data.videoPath
       if (!videoExists) {
-        setLoadError(`Video not found: "${data.videoPath.split('/').pop()}". Please locate it.`)
+        if (data.youtubeUrl) {
+          setPendingRestore({ type: 'segments', rawJson, filePath, youtubeUrl: data.youtubeUrl })
+          return
+        }
+        setLoadError(`Video not found: "${data.videoPath?.split('/').pop()}". Please locate it.`)
         const picked = await window.api.files.openAny()
         if (!picked || picked.endsWith('.lecturesubs') || picked.endsWith('.lectureclips') || picked.endsWith('.lecturesegments')) {
           setLoadError('Could not locate video — segments not loaded.')
@@ -164,9 +183,42 @@ export default function ImportScreen() {
       useSegmentsStore.getState().setSegments(data.segments ?? [])
       useSegmentsStore.getState().markSaved(filePath)
       useSegmentsStore.getState().setReturnScreen('import')
+      if (data.reviewIssues?.length) {
+        useReviewStore.getState().setIssues(data.reviewIssues)
+        useReviewStore.getState().setStatus('done')
+      } else {
+        useReviewStore.getState().reset()
+      }
       setScreen('youtube')
     } catch {
       setLoadError('Failed to load segments file.')
+    }
+  }
+
+  async function handlePendingRedownload() {
+    if (!pendingRestore) return
+    const { type, rawJson, filePath, youtubeUrl } = pendingRestore
+    setPendingRestore(null)
+    setTab('youtube')
+    setYtUrl(youtubeUrl)
+    setYtDownloading(true)
+    setYtStatus('Starting download...')
+    cancelRef.current = false
+    try {
+      const downloadsDir = await window.api.files.getDownloadsDir()
+      const ytDir = `${downloadsDir}/yt-${Date.now()}`
+      const { filePath: newVideoPath } = await window.api.youtube.download(youtubeUrl, ytDir)
+      if (cancelRef.current) return
+      refreshDownloads()
+      const data = JSON.parse(rawJson)
+      data.videoPath = newVideoPath
+      if (type === 'clips') await loadClipsFile(JSON.stringify(data), filePath)
+      else await loadSegmentsFile(JSON.stringify(data), filePath)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setYtDownloading(false)
+      setYtStatus('')
     }
   }
 
@@ -187,6 +239,12 @@ export default function ImportScreen() {
         return
       }
       setProject({ ...project, projectFilePath })
+      if (project.reviewIssues?.length) {
+        useReviewStore.getState().setIssues(project.reviewIssues)
+        useReviewStore.getState().setStatus('done')
+      } else {
+        useReviewStore.getState().reset()
+      }
     } catch {
       setLoadError('Failed to load project file.')
     }
@@ -375,11 +433,14 @@ export default function ImportScreen() {
                     {downloads.map((d) => (
                       <button
                         key={d.path}
-                        onClick={() => loadVideo(d.path)}
+                        onClick={() => loadVideo(d.path, d.name, d.url)}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[hsl(220,15%,22%)] bg-[hsl(222,20%,13%)] hover:border-[hsl(220,15%,35%)] hover:bg-[hsl(222,20%,16%)] text-left transition-colors"
                       >
-                        <span className="text-base">🎬</span>
-                        <span className="text-xs text-[hsl(210,20%,80%)] truncate">{d.name}</span>
+                        <span className="text-base flex-shrink-0">🎬</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs text-[hsl(210,20%,80%)] truncate">{d.name}</span>
+                          <span className="text-[10px] text-[hsl(215,15%,40%)]">{new Date(d.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -389,6 +450,37 @@ export default function ImportScreen() {
           </div>
         )}
 
+
+        {pendingRestore && (
+          <div className="w-full max-w-xl px-4 py-4 bg-amber-900/25 border border-amber-700/40 rounded-lg flex flex-col gap-3">
+            <p className="text-sm text-amber-300 font-medium">Video file not found on this machine</p>
+            <p className="text-xs text-amber-400/70">This {pendingRestore.type === 'clips' ? 'clips' : 'segments'} file was originally made from a YouTube video. Re-download it to continue, or locate it manually.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePendingRedownload}
+                disabled={ytDownloading}
+                className="px-3 py-1.5 text-xs rounded bg-amber-700 hover:bg-amber-600 text-white font-medium disabled:opacity-40"
+              >
+                {ytDownloading ? 'Downloading...' : 'Re-download from YouTube'}
+              </button>
+              <button
+                onClick={async () => {
+                  const picked = await window.api.files.openAny()
+                  if (!picked) return
+                  const data = JSON.parse(pendingRestore.rawJson)
+                  data.videoPath = picked
+                  setPendingRestore(null)
+                  if (pendingRestore.type === 'clips') await loadClipsFile(JSON.stringify(data), pendingRestore.filePath)
+                  else await loadSegmentsFile(JSON.stringify(data), pendingRestore.filePath)
+                }}
+                className="px-3 py-1.5 text-xs rounded border border-amber-700/50 text-amber-400 hover:text-white hover:border-amber-600"
+              >
+                Browse for file
+              </button>
+              <button onClick={() => setPendingRestore(null)} className="ml-auto text-xs text-amber-600 hover:text-amber-400">Dismiss</button>
+            </div>
+          </div>
+        )}
 
         {loadError && (
           <div className="w-full max-w-xl px-4 py-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-400 text-sm">

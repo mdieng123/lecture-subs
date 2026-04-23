@@ -14,6 +14,7 @@ interface SegmentsStore {
   setDetecting: (v: boolean) => void
   setError: (e: string | null) => void
   markSaved: (filePath: string) => void
+  markDirty: () => void
   setReturnScreen: (s: 'editor' | 'import') => void
   toggleSegment: (id: string) => void
   selectAll: () => void
@@ -38,6 +39,7 @@ export const useSegmentsStore = create<SegmentsStore>((set, get) => ({
   setDetecting: (v) => set({ detecting: v }),
   setError: (e) => set({ error: e }),
   markSaved: (filePath) => set({ isDirty: false, savedFilePath: filePath }),
+  markDirty: () => set({ isDirty: true }),
   setReturnScreen: (s) => set({ returnScreen: s }),
 
   toggleSegment: (id) => set((s) => ({

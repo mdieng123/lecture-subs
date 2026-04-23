@@ -36,6 +36,7 @@ interface ClipsStore {
   setDetecting: (v: boolean) => void
   setError: (e: string | null) => void
   markSaved: (filePath: string) => void
+  markDirty: () => void
   setReturnScreen: (s: 'editor' | 'import') => void
   toggleClip: (id: string) => void
   selectAll: () => void
@@ -60,6 +61,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
   setDetecting: (v) => set({ detecting: v }),
   setError: (e) => set({ error: e }),
   markSaved: (filePath) => set({ isDirty: false, savedFilePath: filePath }),
+  markDirty: () => set({ isDirty: true }),
   setReturnScreen: (s) => set({ returnScreen: s }),
 
   toggleClip: (id) => set((s) => ({

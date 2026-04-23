@@ -343,6 +343,73 @@ Return JSON with a segments array covering the full video.`
   }
 })
 
+const SCRUTINIZE_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    issues: {
+      type: 'array' as const,
+      items: {
+        type: 'object' as const,
+        properties: {
+          cue_id: { type: 'string' as const },
+          type: { type: 'string' as const, enum: ['transcription', 'translation', 'islamic_phrase', 'grammar'] },
+          problem: { type: 'string' as const },
+          suggested_arabic: { type: 'string' as const },
+          suggested_english: { type: 'string' as const },
+          confidence: { type: 'string' as const, enum: ['high', 'medium', 'low'] },
+        },
+        required: ['cue_id', 'type', 'problem', 'confidence'],
+      },
+    },
+  },
+  required: ['issues'],
+}
+
+ipcMain.handle('gemini:scrutinize', async (_event, cues: { id: string; arabic: string; english: string }[]) => {
+  const apiKey = await getApiKey()
+  if (!apiKey) return { error: 'No API key configured' }
+
+  const store = new Store()
+  const model = (store.get('model') as string) ?? 'gemini-2.5-flash'
+  const ai = new GoogleGenAI({ apiKey })
+
+  const cueLines = cues
+    .map((c) => `{"id":"${c.id}","arabic":${JSON.stringify(c.arabic)},"english":${JSON.stringify(c.english)}}`)
+    .join('\n')
+
+  const prompt = `You are an expert Arabic Islamic lecture reviewer. Examine these subtitle cues from a lecture and flag genuine errors only.
+
+Flag a cue if it has:
+1. "transcription" — garbled or phonetically wrong Arabic (Whisper speech-to-text hallucinations, non-words, clearly wrong words). Provide corrected Arabic in suggested_arabic.
+2. "translation" — the English meaning clearly does not match the Arabic text. Provide corrected English in suggested_english.
+3. "islamic_phrase" — an Islamic term, honorific, Quranic phrase, or du'a that was misheard or mistranscribed (e.g. sallallahu alayhi wa sallam, radiallahu anhu, Quranic ayahs). Provide corrected Arabic and/or English.
+4. "grammar" — correct Arabic words but with wrong grammatical form: wrong verb conjugation, incorrect gender/number agreement, wrong case ending, or a word that is grammatically inconsistent with the surrounding cues. Provide corrected Arabic in suggested_arabic.
+
+Rules:
+- ONLY flag actual errors — do not flag stylistic choices, synonyms, or missing diacritics
+- If Arabic is empty string, skip transcription check for that cue
+- Confidence "high" = obvious error, "medium" = likely error, "low" = possible error
+- Only include suggested_arabic/suggested_english when you are confident in the correction
+- CONTEXT: Always read the cues immediately before and after the suspect cue before deciding. A word that looks wrong in isolation may be correct given the surrounding speech, and a sentence fragment that seems fine alone may reveal a transcription error when read in sequence. Use the full transcript flow to inform every correction.
+
+Cues (JSON, one per line):
+${cueLines}
+
+Return JSON with an "issues" array. Return empty array if no issues found.`
+
+  try {
+    const result = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: SCRUTINIZE_SCHEMA },
+    })
+    const parsed = JSON.parse(result.text ?? '{}')
+    return { issues: parsed.issues ?? [] }
+  } catch (err) {
+    return { error: scrubError(err).message }
+  }
+})
+
 ipcMain.handle('gemini:cancelProcessing', () => {
   cancelRequested = true
   return { ok: true }

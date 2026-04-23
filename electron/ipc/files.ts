@@ -117,16 +117,26 @@ ipcMain.handle('files:clearDownloads', () => {
 ipcMain.handle('files:listDownloads', () => {
   if (!fs.existsSync(DOWNLOADS_DIR)) return []
   const videoExts = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi'])
-  const results: { name: string; path: string; createdAt: number }[] = []
+  const results: { name: string; path: string; createdAt: number; url?: string }[] = []
   for (const entry of fs.readdirSync(DOWNLOADS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     const dir = path.join(DOWNLOADS_DIR, entry.name)
+    let metaTitle: string | undefined
+    let metaUrl: string | undefined
+    const metaPath = path.join(dir, 'metadata.json')
+    if (fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+        if (meta.title) metaTitle = meta.title
+        if (meta.url) metaUrl = meta.url
+      } catch {}
+    }
     for (const file of fs.readdirSync(dir, { withFileTypes: true })) {
       if (!file.isFile()) continue
       if (!videoExts.has(path.extname(file.name).toLowerCase())) continue
       const filePath = path.join(dir, file.name)
       const stat = fs.statSync(filePath)
-      results.push({ name: file.name, path: filePath, createdAt: stat.birthtimeMs })
+      results.push({ name: metaTitle ?? file.name, path: filePath, createdAt: stat.birthtimeMs, url: metaUrl })
     }
   }
   return results.sort((a, b) => b.createdAt - a.createdAt)

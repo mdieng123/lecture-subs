@@ -16,6 +16,7 @@ export interface Project {
   future: Cue[][];
   createdAt: number;
   projectFilePath?: string;
+  youtubeUrl?: string;
 }
 
 export interface Settings {
@@ -28,6 +29,17 @@ export interface Settings {
 export type AppScreen = 'import' | 'processing' | 'editor' | 'clips' | 'youtube';
 
 export type SegmentDurationRange = '4-6' | '7-10' | '11-15' | '15-20';
+
+export interface ReviewIssue {
+  id: string
+  cueId: string
+  type: 'transcription' | 'translation' | 'islamic_phrase' | 'grammar'
+  problem: string
+  suggestedArabic?: string
+  suggestedEnglish?: string
+  confidence: 'high' | 'medium' | 'low'
+  status: 'pending' | 'approved' | 'dismissed'
+}
 
 export interface VideoSegment {
   id: string;

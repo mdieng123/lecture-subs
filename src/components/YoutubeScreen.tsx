@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import { useSegmentsStore } from '../state/segmentsStore'
+import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
-import { serializeSrt, formatDuration } from '../utils'
+import ReviewPanel from './ReviewPanel'
+import { serializeSrt, formatDuration, runScrutinize } from '../utils'
 import type { VideoSegment, Cue } from '../types'
 
 const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22, xl: 30, xxl: 40 }
@@ -10,13 +12,48 @@ const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22,
 export default function YoutubeScreen() {
   const setScreen = useProjectStore((s) => s.setScreen)
   const project = useProjectStore((s) => s.project)
-  const { segments, detecting, error, isDirty, savedFilePath, returnScreen, markSaved, toggleSegment, selectAll, deselectAll } = useSegmentsStore()
+  const { segments, detecting, error, isDirty, savedFilePath, returnScreen, markSaved, toggleSegment, selectAll, deselectAll, updateSegmentCue } = useSegmentsStore()
   const selected = segments.filter((s) => s.selected)
   const [exporting, setExporting] = useState(false)
   const [exportDone, setExportDone] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showBackWarning, setShowBackWarning] = useState(false)
+  const reviewStore = useReviewStore()
+
+  async function handleReview() {
+    const currentStatus = useReviewStore.getState().status
+    if (currentStatus === 'done' || currentStatus === 'analyzing') { reviewStore.setOpen(true); return }
+    const sid = reviewStore.startSession()
+    reviewStore.setOpen(true)
+    reviewStore.setStatus('analyzing')
+    try {
+      const issues = await runScrutinize(segments.flatMap((seg) => seg.cues.map((c) => ({ id: c.id, arabic: c.arabic ?? '', english: c.english }))))
+      if (useReviewStore.getState().sessionId !== sid) return
+      reviewStore.setIssues(issues)
+      reviewStore.setStatus('done')
+    } catch (err) {
+      if (useReviewStore.getState().sessionId !== sid) return
+      reviewStore.setError(err instanceof Error ? err.message : String(err))
+      reviewStore.setStatus('error')
+    }
+  }
+
+  function getCue(id: string) {
+    for (const seg of segments) {
+      const cue = seg.cues.find((c) => c.id === id)
+      if (cue) return cue
+    }
+  }
+
+  function applyFix(cueId: string, patch: { arabic?: string; english?: string }) {
+    for (const seg of segments) {
+      if (seg.cues.some((c) => c.id === cueId)) {
+        updateSegmentCue(seg.id, cueId, patch)
+        return
+      }
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -31,7 +68,9 @@ export default function YoutubeScreen() {
         version: 1,
         videoPath: project?.videoPath,
         projectFilePath: project?.projectFilePath ?? null,
+        youtubeUrl: project?.youtubeUrl ?? null,
         segments,
+        reviewIssues: useReviewStore.getState().issues,
       })
       await window.api.files.writeFile(savePath, data)
       markSaved(savePath)
@@ -44,6 +83,7 @@ export default function YoutubeScreen() {
     if (isDirty) {
       setShowBackWarning(true)
     } else {
+      reviewStore.reset()
       setScreen(returnScreen)
     }
   }
@@ -132,6 +172,17 @@ export default function YoutubeScreen() {
           <button onClick={selectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">Select all</button>
           <button onClick={deselectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">None</button>
           <button
+            onClick={handleReview}
+            className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
+          >
+            {reviewStore.status === 'analyzing' ? 'Reviewing...' : 'Review'}
+            {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
+                {reviewStore.issues.filter((i) => i.status === 'pending').length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={handleSave}
             disabled={saving || !isDirty}
             className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] disabled:opacity-40 transition-colors"
@@ -141,13 +192,20 @@ export default function YoutubeScreen() {
           {exportDone ? (
             <span className="text-xs text-green-400 px-3">Exported!</span>
           ) : (
-            <button
-              onClick={handleExport}
-              disabled={exporting || selected.length === 0}
-              className="px-4 py-1.5 text-sm rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {exporting ? 'Exporting...' : `Export ${selected.length} segment${selected.length !== 1 ? 's' : ''}`}
-            </button>
+            <div className="flex items-center gap-2">
+              {reviewStore.status !== 'done' && reviewStore.issues.length === 0 && (
+                <span className="text-[11px] text-amber-400/80" title="Run a review before exporting to catch transcription or translation issues">
+                  ⚠ Not reviewed
+                </span>
+              )}
+              <button
+                onClick={handleExport}
+                disabled={exporting || selected.length === 0}
+                className="px-4 py-1.5 text-sm rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exporting ? 'Exporting...' : `Export ${selected.length} segment${selected.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -173,7 +231,7 @@ export default function YoutubeScreen() {
                 Save then go back
               </button>
               <button
-                onClick={() => { setShowBackWarning(false); setScreen(returnScreen) }}
+                onClick={() => { reviewStore.reset(); setShowBackWarning(false); setScreen(returnScreen) }}
                 className="px-4 py-2 text-sm rounded-lg text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600"
               >
                 Discard
@@ -199,6 +257,29 @@ export default function YoutubeScreen() {
           ))}
         </div>
       </div>
+
+      {reviewStore.open && (
+        <ReviewPanel
+          videoPath={project?.videoPath ?? ''}
+          getAbsoluteTime={(cueId) => {
+            for (const seg of segments) {
+              const cue = seg.cues.find((c) => c.id === cueId)
+              if (cue) return seg.startSeconds + cue.startSeconds
+            }
+          }}
+          onClose={() => reviewStore.setOpen(false)}
+          onRerun={() => { reviewStore.reset(); handleReview() }}
+          getCue={getCue}
+          onApplyFix={applyFix}
+          getContext={(cueId) => {
+            for (const seg of segments) {
+              const idx = seg.cues.findIndex((c) => c.id === cueId)
+              if (idx !== -1) return { title: seg.title, cueIndex: idx + 1, totalCues: seg.cues.length }
+            }
+          }}
+          onMarkDirty={() => useSegmentsStore.getState().markDirty()}
+        />
+      )}
     </div>
   )
 }

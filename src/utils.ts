@@ -1,3 +1,25 @@
+import type { ReviewIssue } from './types'
+
+export async function runScrutinize(
+  cues: { id: string; arabic: string; english: string }[]
+): Promise<ReviewIssue[]> {
+  // Use numeric indices as IDs so Gemini can't mangle UUIDs
+  const idMap = cues.map((c) => c.id)
+  const payload = cues.map((c, i) => ({ id: String(i), arabic: c.arabic, english: c.english }))
+  const result = await window.api.gemini.scrutinize(payload)
+  if (result.error) throw new Error(result.error)
+  return (result.issues ?? []).map((raw: any, i: number) => ({
+    id: `issue-${i}-${Date.now()}`,
+    cueId: idMap[parseInt(raw.cue_id)] ?? raw.cue_id,
+    type: raw.type,
+    problem: raw.problem,
+    suggestedArabic: raw.suggested_arabic || undefined,
+    suggestedEnglish: raw.suggested_english || undefined,
+    confidence: raw.confidence,
+    status: 'pending' as const,
+  }))
+}
+
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
