@@ -12,6 +12,8 @@ export default function App() {
   const setHasGroqKey = useProjectStore((s) => s.setHasGroqKey)
   const setSettings = useProjectStore((s) => s.setSettings)
   const setLogoSettings = useProjectStore((s) => s.setLogoSettings)
+  const setIntroVideoPath = useProjectStore((s) => s.setIntroVideoPath)
+  const setAudioBackgroundPath = useProjectStore((s) => s.setAudioBackgroundPath)
   const groqQuotaExhaustedAt = useProjectStore((s) => s.groqQuotaExhaustedAt)
   const setGroqQuotaExhaustedAt = useProjectStore((s) => s.setGroqQuotaExhaustedAt)
   const [quotaSecsLeft, setQuotaSecsLeft] = useState<number | null>(null)
@@ -26,6 +28,8 @@ export default function App() {
     ]).then(([ls, logoPath]) => {
       setLogoSettings({ ...ls, path: logoPath })
     })
+    window.api.files.getIntroVideoPath().then(setIntroVideoPath)
+    window.api.files.getAudioBackgroundPath().then(setAudioBackgroundPath)
 
     const unsub = window.api.gemini.onChunkProgress((data: unknown) => {
       const d = data as { status?: string }

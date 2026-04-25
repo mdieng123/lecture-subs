@@ -104,6 +104,9 @@ export default function YoutubeScreen() {
 
     try {
       const tmpDir = await window.api.files.getTmpDir()
+      const introVideoPath = useProjectStore.getState().introVideoPath
+      const hasIntro = !!(introVideoPath && await window.api.files.exists(introVideoPath))
+
       for (let i = 0; i < toExport.length; i++) {
         const seg = toExport[i]
         const srtContent = serializeSrt(seg.cues, false)
@@ -112,6 +115,7 @@ export default function YoutubeScreen() {
 
         const safeTitle = seg.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
         const outputPath = `${folder}/${String(i + 1).padStart(2, '0')}_${safeTitle}.mp4`
+        const mainPath = hasIntro ? `${tmpDir}/seg_${i}_main.mp4` : outputPath
 
         const logo = useProjectStore.getState().logoSettings
         const style = useProjectStore.getState().subtitleStyle
@@ -120,7 +124,7 @@ export default function YoutubeScreen() {
           srtPath,
           seg.startSeconds,
           seg.endSeconds - seg.startSeconds,
-          outputPath,
+          mainPath,
           {
             fontSize: FONT_SIZE_PX[style.fontSize] ?? 22,
             position: style.position,
@@ -128,6 +132,10 @@ export default function YoutubeScreen() {
             ...(logo.enabled && logo.path ? { logoPath: logo.path, logoPosition: logo.position, logoSize: logo.size, logoOpacity: logo.opacity } : {}),
           }
         )
+
+        if (hasIntro) {
+          await window.api.ffmpeg.prependIntro(introVideoPath!, mainPath, outputPath)
+        }
       }
       setExportDone(true)
     } catch (err) {

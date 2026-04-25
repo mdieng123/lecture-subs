@@ -237,6 +237,7 @@ export default function ProcessingScreen() {
         history: [],
         future: [],
         createdAt: Date.now(),
+        audioOnly: processing?.audioOnly,
       })
 
     } catch (err) {
@@ -256,6 +257,7 @@ export default function ProcessingScreen() {
       history: [],
       future: [],
       createdAt: Date.now(),
+      audioOnly: processing?.audioOnly,
     })
   }
 

@@ -20,6 +20,104 @@ function getMainWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
 }
 
+ipcMain.handle('ffmpeg:prependIntro', (
+  _event,
+  introPath: string,
+  mainPath: string,
+  outputPath: string
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const win = getMainWindow()
+    ffmpeg.ffprobe(introPath, (err, introMeta) => {
+      if (err) return reject(err)
+      const introDur = introMeta.format.duration ?? 0
+      const fadeSt = Math.max(0, introDur - 0.5).toFixed(3)
+      const introHasAudio = introMeta.streams.some((s) => s.codec_type === 'audio')
+
+      ffmpeg.ffprobe(mainPath, (err2, mainMeta) => {
+        if (err2) return reject(err2)
+        const vStream = mainMeta.streams.find((s) => s.codec_type === 'video')
+        const W = vStream?.width ?? 1920
+        const H = vStream?.height ?? 1080
+
+        let filterComplex: string
+        if (introHasAudio) {
+          filterComplex = [
+            `[0:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fade=t=out:st=${fadeSt}:d=0.5[v0]`,
+            `[0:a]afade=t=out:st=${fadeSt}:d=0.5[a0]`,
+            `[1:v]fade=t=in:st=0:d=0.5[v1]`,
+            `[1:a]afade=t=in:st=0:d=0.5[a1]`,
+            `[v0][a0][v1][a1]concat=n=2:v=1:a=1[vout][aout]`,
+          ].join(';')
+        } else {
+          filterComplex = [
+            `[0:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fade=t=out:st=${fadeSt}:d=0.5[v0]`,
+            `aevalsrc=0:c=stereo:s=44100:d=${introDur.toFixed(3)}[a0]`,
+            `[1:v]fade=t=in:st=0:d=0.5[v1]`,
+            `[1:a]afade=t=in:st=0:d=0.5[a1]`,
+            `[v0][a0][v1][a1]concat=n=2:v=1:a=1[vout][aout]`,
+          ].join(';')
+        }
+
+        ffmpeg()
+          .input(introPath)
+          .input(mainPath)
+          .outputOptions([
+            '-filter_complex', filterComplex,
+            '-map', '[vout]',
+            '-map', '[aout]',
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '22',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+          ])
+          .output(outputPath)
+          .on('progress', (p) => sendProgress(win, { stage: 'intro', percent: p.percent ?? 0 }))
+          .on('end', () => resolve(outputPath))
+          .on('error', reject)
+          .run()
+      })
+    })
+  })
+})
+
+ipcMain.handle('ffmpeg:createVideoFromAudio', (
+  _event,
+  audioPath: string,
+  imagePath: string | null,
+  outputPath: string
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const win = getMainWindow()
+    const cmd = ffmpeg()
+
+    if (imagePath && fs.existsSync(imagePath)) {
+      cmd.input(imagePath).inputOptions(['-loop', '1'])
+    } else {
+      cmd.input('color=black:s=1920x1080:r=25').inputOptions(['-f', 'lavfi'])
+    }
+
+    cmd.input(audioPath)
+      .outputOptions([
+        '-c:v', 'libx264',
+        '-tune', 'stillimage',
+        '-vf', 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p',
+        '-preset', 'ultrafast',
+        '-crf', '35',
+        '-c:a', 'copy',
+        '-shortest',
+        '-pix_fmt', 'yuv420p',
+      ])
+      .output(outputPath)
+      .on('progress', (p) => sendProgress(win, { stage: 'slideshow', percent: p.percent ?? 0 }))
+      .on('end', () => resolve(outputPath))
+      .on('error', reject)
+      .run()
+  })
+})
+
 ipcMain.handle('ffmpeg:getVideoDuration', (_event, videoPath: string): Promise<{ duration: number; hasAudio: boolean }> => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(videoPath, (err, metadata) => {

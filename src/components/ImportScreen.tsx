@@ -26,6 +26,7 @@ export default function ImportScreen() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [tab, setTab] = useState<'file' | 'youtube'>('file')
+  const [audioOnly, setAudioOnly] = useState(false)
   const [ytUrl, setYtUrl] = useState('')
   const [ytDownloading, setYtDownloading] = useState(false)
   const [, setYtProgress] = useState(0)
@@ -85,22 +86,23 @@ export default function ImportScreen() {
     setYtProgress(0)
   }
 
-  async function loadVideo(filePath: string, title?: string, youtubeUrl?: string) {
+  async function loadVideo(filePath: string, title?: string, youtubeUrl?: string, isAudioOnly?: boolean) {
     setLoadError(null)
     try {
       const { duration, hasAudio } = await window.api.ffmpeg.getVideoDuration(filePath)
       if (!hasAudio) {
-        setLoadError('This video has no audio track. Please use a video with audio.')
+        setLoadError('This file has no audio track. Please use a file with audio.')
         return
       }
       const name = title ?? filePath.split('/').pop() ?? filePath
       setVideoInfo({ path: filePath, name, size: 'unknown', duration })
+      if (isAudioOnly !== undefined) setAudioOnly(isAudioOnly)
       if (youtubeUrl) {
         useProjectStore.getState().setProject({ ...(useProjectStore.getState().project ?? {} as any), youtubeUrl })
       }
       setTab('file')
     } catch (err) {
-      setLoadError(`Could not read video: ${err instanceof Error ? err.message : String(err)}`)
+      setLoadError(`Could not read file: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -227,11 +229,13 @@ export default function ImportScreen() {
       const project = JSON.parse(rawJson)
       const videoExists = await window.api.files.exists(project.videoPath)
       if (!videoExists) {
-        setLoadError(`Video not found: "${project.videoPath.split('/').pop()}". Please locate it below.`)
-        // Store the project data without the bad path, prompt user to pick the video
-        const newVideoPath = await window.api.files.openAny()
+        const label = project.audioOnly ? 'Audio' : 'Video'
+        setLoadError(`${label} not found: "${project.videoPath.split('/').pop()}". Please locate it below.`)
+        const newVideoPath = project.audioOnly
+          ? await window.api.files.openAudio()
+          : await window.api.files.openAny()
         if (!newVideoPath || newVideoPath.endsWith('.lecturesubs')) {
-          setLoadError('Could not locate video — project not loaded.')
+          setLoadError(`Could not locate ${label.toLowerCase()} — project not loaded.`)
           return
         }
         setProject({ ...project, videoPath: newVideoPath, projectFilePath })
@@ -274,15 +278,23 @@ export default function ImportScreen() {
       await loadSegmentsFile(raw, filePath)
       return
     }
-    const allowed = ['mp4', 'mov', 'mkv', 'webm', 'avi']
+    const videoExts = ['mp4', 'mov', 'mkv', 'webm', 'avi']
+    const audioExts = ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus']
+    const allowed = audioOnly ? [...videoExts, ...audioExts] : videoExts
     if (!allowed.includes(ext)) {
       setLoadError(`Unsupported file type: .${ext}`)
       return
     }
-    await loadVideo(window.api.getFilePath(file))
-  }, [setProject, loadVideo])
+    const isAudio = audioExts.includes(ext)
+    await loadVideo(window.api.getFilePath(file), undefined, undefined, isAudio || audioOnly)
+  }, [setProject, loadVideo, audioOnly])
 
   async function handleBrowse() {
+    if (audioOnly) {
+      const filePath = await window.api.files.openAudio()
+      if (filePath) await loadVideo(filePath, undefined, undefined, true)
+      return
+    }
     const filePath = await window.api.files.openAny()
     if (!filePath) return
     if (filePath.endsWith('.lecturesubs')) {
@@ -307,6 +319,7 @@ export default function ImportScreen() {
       stageProgress: 0,
       log: [`Loading: ${videoInfo.name}`],
       videoPath: videoInfo.path,
+      audioOnly,
     })
   }
 
@@ -372,23 +385,41 @@ export default function ImportScreen() {
             </div>
 
             {tab === 'file' ? (
-              <div
-                onDrop={handleDrop}
-                onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-                onDragLeave={() => setDragging(false)}
-                onClick={handleBrowse}
-                className={`
-                  w-full border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer
-                  ${dragging
-                    ? 'border-[hsl(210,80%,55%)] bg-[hsl(210,80%,55%,0.08)]'
-                    : 'border-[hsl(220,15%,28%)] hover:border-[hsl(220,15%,40%)] hover:bg-[hsl(222,20%,13%)]'}
-                `}
-              >
-                <div className="space-y-3">
-                  <div className="text-4xl opacity-40">📹</div>
-                  <div className="text-[hsl(210,20%,80%)] font-medium">Drop video here or click to browse</div>
-                  <div className="text-sm text-[hsl(215,15%,50%)]">MP4, MOV, MKV, WebM, AVI · .lecturesubs · .lectureclips · .lecturesegments</div>
+              <div className="flex flex-col gap-3">
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+                  onDragLeave={() => setDragging(false)}
+                  onClick={handleBrowse}
+                  className={`
+                    w-full border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer
+                    ${dragging
+                      ? 'border-[hsl(210,80%,55%)] bg-[hsl(210,80%,55%,0.08)]'
+                      : 'border-[hsl(220,15%,28%)] hover:border-[hsl(220,15%,40%)] hover:bg-[hsl(222,20%,13%)]'}
+                  `}
+                >
+                  <div className="space-y-3">
+                    <div className="text-4xl opacity-40">{audioOnly ? '🎵' : '📹'}</div>
+                    <div className="text-[hsl(210,20%,80%)] font-medium">
+                      {audioOnly ? 'Drop audio here or click to browse' : 'Drop video here or click to browse'}
+                    </div>
+                    <div className="text-sm text-[hsl(215,15%,50%)]">
+                      {audioOnly
+                        ? 'MP3, WAV, M4A, AAC, FLAC, OGG · or video files'
+                        : 'MP4, MOV, MKV, WebM, AVI · .lecturesubs · .lectureclips · .lecturesegments'}
+                    </div>
+                  </div>
                 </div>
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <div
+                    onClick={() => { setAudioOnly((v) => !v); setVideoInfo(null); setLoadError(null) }}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${audioOnly ? 'bg-[hsl(210,80%,55%)]' : 'bg-[hsl(220,15%,28%)]'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${audioOnly ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </div>
+                  <span className="text-sm text-[hsl(215,15%,55%)]">Audio only upload</span>
+                  {audioOnly && <span className="text-xs text-[hsl(215,15%,40%)]">— set a background image in Settings</span>}
+                </label>
               </div>
             ) : (
               <div className="flex flex-col gap-3">

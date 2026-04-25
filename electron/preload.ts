@@ -40,6 +40,13 @@ const api = {
     pickLogo: () => ipcRenderer.invoke('files:pickLogo'),
     getLogoPath: () => ipcRenderer.invoke('files:getLogoPath'),
     deleteLogo: () => ipcRenderer.invoke('files:deleteLogo'),
+    pickIntroVideo: () => ipcRenderer.invoke('files:pickIntroVideo'),
+    getIntroVideoPath: () => ipcRenderer.invoke('files:getIntroVideoPath'),
+    deleteIntroVideo: () => ipcRenderer.invoke('files:deleteIntroVideo'),
+    pickAudioBackground: () => ipcRenderer.invoke('files:pickAudioBackground'),
+    getAudioBackgroundPath: () => ipcRenderer.invoke('files:getAudioBackgroundPath'),
+    deleteAudioBackground: () => ipcRenderer.invoke('files:deleteAudioBackground'),
+    openAudio: () => ipcRenderer.invoke('files:openAudio'),
   },
 
   // ffmpeg
@@ -60,6 +67,10 @@ const api = {
       ipcRenderer.invoke('ffmpeg:exportClip', videoPath, srtPath, startSeconds, durationSeconds, outputPath, opts),
     exportSegment: (videoPath: string, srtPath: string, startSeconds: number, durationSeconds: number, outputPath: string, opts: Record<string, unknown>) =>
       ipcRenderer.invoke('ffmpeg:exportSegment', videoPath, srtPath, startSeconds, durationSeconds, outputPath, opts),
+    prependIntro: (introPath: string, mainPath: string, outputPath: string) =>
+      ipcRenderer.invoke('ffmpeg:prependIntro', introPath, mainPath, outputPath),
+    createVideoFromAudio: (audioPath: string, imagePath: string | null, outputPath: string) =>
+      ipcRenderer.invoke('ffmpeg:createVideoFromAudio', audioPath, imagePath, outputPath),
     onProgress: (callback: (data: unknown) => void) => {
       const handler = (_: Electron.IpcRendererEvent, data: unknown) => callback(data)
       ipcRenderer.on('ffmpeg:progress', handler)

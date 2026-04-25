@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import type { Settings } from '../types'
 
+const INTRO_MAX_SECONDS = 20
+
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const settings = useProjectStore((s) => s.settings)
   const setSettings = useProjectStore((s) => s.setSettings)
@@ -210,6 +212,12 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           {/* Logo watermark */}
           <LogoSection />
 
+          {/* Intro video */}
+          <IntroVideoSection />
+
+          {/* Audio-only background */}
+          <AudioBackgroundSection />
+
           {/* YouTube downloads storage */}
           <DownloadsSection />
 
@@ -275,6 +283,98 @@ function LogoSection() {
           className="px-4 py-2 text-sm rounded-lg border border-dashed border-[hsl(220,15%,30%)] text-[hsl(215,15%,50%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
         >
           + Upload logo image
+        </button>
+      )}
+    </div>
+  )
+}
+
+function IntroVideoSection() {
+  const introVideoPath = useProjectStore((s) => s.introVideoPath)
+  const setIntroVideoPath = useProjectStore((s) => s.setIntroVideoPath)
+  const [durationError, setDurationError] = useState<string | null>(null)
+
+  async function handlePickIntro() {
+    setDurationError(null)
+    const introPath = await window.api.files.pickIntroVideo()
+    if (!introPath) return
+    const { duration } = await window.api.ffmpeg.getVideoDuration(introPath)
+    if (duration > INTRO_MAX_SECONDS) {
+      await window.api.files.deleteIntroVideo()
+      setDurationError(`Intro is ${Math.round(duration)}s — max is ${INTRO_MAX_SECONDS}s. Please trim it first.`)
+      return
+    }
+    setIntroVideoPath(introPath)
+  }
+
+  async function handleRemoveIntro() {
+    await window.api.files.deleteIntroVideo()
+    setIntroVideoPath(null)
+    setDurationError(null)
+  }
+
+  const filename = introVideoPath?.split('/').pop() ?? null
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1 text-[hsl(210,20%,80%)]">
+        Intro Video
+        <span className="ml-2 text-xs font-normal text-[hsl(215,15%,45%)]">prepended to full lecture &amp; YouTube segment exports</span>
+      </label>
+      <p className="text-xs text-[hsl(215,15%,42%)] mb-2">Max {INTRO_MAX_SECONDS} sec · fades to black then fades into the lecture video</p>
+      {introVideoPath ? (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[hsl(210,20%,75%)] truncate max-w-[180px]">{filename}</span>
+          <span className="text-xs text-green-400">Uploaded</span>
+          <button onClick={handlePickIntro} className="text-xs text-[hsl(215,15%,45%)] hover:text-white">Replace</button>
+          <button onClick={handleRemoveIntro} className="ml-auto text-xs text-[hsl(215,15%,40%)] hover:text-red-400">Remove</button>
+        </div>
+      ) : (
+        <button
+          onClick={handlePickIntro}
+          className="px-4 py-2 text-sm rounded-lg border border-dashed border-[hsl(220,15%,30%)] text-[hsl(215,15%,50%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
+        >
+          + Upload intro video
+        </button>
+      )}
+      {durationError && <p className="mt-1.5 text-xs text-red-400">{durationError}</p>}
+    </div>
+  )
+}
+
+function AudioBackgroundSection() {
+  const audioBackgroundPath = useProjectStore((s) => s.audioBackgroundPath)
+  const setAudioBackgroundPath = useProjectStore((s) => s.setAudioBackgroundPath)
+
+  async function handlePickBg() {
+    const bgPath = await window.api.files.pickAudioBackground()
+    if (bgPath) setAudioBackgroundPath(bgPath)
+  }
+
+  async function handleRemoveBg() {
+    await window.api.files.deleteAudioBackground()
+    setAudioBackgroundPath(null)
+  }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1 text-[hsl(210,20%,80%)]">
+        Audio-Only Background Image
+        <span className="ml-2 text-xs font-normal text-[hsl(215,15%,45%)]">shown &amp; exported for audio-only lectures</span>
+      </label>
+      {audioBackgroundPath ? (
+        <div className="flex items-center gap-3">
+          <img src={`file://${audioBackgroundPath}`} className="h-10 w-auto rounded border border-[hsl(220,15%,25%)]" alt="bg" />
+          <span className="text-xs text-green-400">Uploaded</span>
+          <button onClick={handlePickBg} className="text-xs text-[hsl(215,15%,45%)] hover:text-white">Replace</button>
+          <button onClick={handleRemoveBg} className="ml-auto text-xs text-[hsl(215,15%,40%)] hover:text-red-400">Remove</button>
+        </div>
+      ) : (
+        <button
+          onClick={handlePickBg}
+          className="px-4 py-2 text-sm rounded-lg border border-dashed border-[hsl(220,15%,30%)] text-[hsl(215,15%,50%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
+        >
+          + Upload background image
         </button>
       )}
     </div>

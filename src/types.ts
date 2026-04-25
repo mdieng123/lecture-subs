@@ -17,6 +17,7 @@ export interface Project {
   createdAt: number;
   projectFilePath?: string;
   youtubeUrl?: string;
+  audioOnly?: boolean;
 }
 
 export interface Settings {
@@ -69,6 +70,7 @@ export interface ProcessingProgress {
   log: string[];
   error?: string;
   videoPath?: string;
+  audioOnly?: boolean;
 }
 
 export interface SubtitleStyle {

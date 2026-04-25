@@ -29,6 +29,8 @@ export default function VideoPreview({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const style = useProjectStore((s) => s.subtitleStyle)
   const logo = useProjectStore((s) => s.logoSettings)
+  const audioOnly = useProjectStore((s) => s.project?.audioOnly ?? false)
+  const audioBackgroundPath = useProjectStore((s) => s.audioBackgroundPath)
 
   const activeCue = cues.find(
     (c) => currentTime >= c.startSeconds && currentTime < c.endSeconds
@@ -75,6 +77,14 @@ export default function VideoPreview({
         controls={false}
         preload="metadata"
       />
+
+      {audioOnly && audioBackgroundPath && (
+        <img
+          src={`file://${audioBackgroundPath}`}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          alt=""
+        />
+      )}
 
       {activeCue && (
         <div className={`absolute ${posClass} left-0 right-0 flex justify-center pointer-events-none`}>

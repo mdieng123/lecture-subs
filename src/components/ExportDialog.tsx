@@ -10,6 +10,8 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
   const subtitleStyle = useProjectStore((s) => s.subtitleStyle)
   const setSubtitleStyle = useProjectStore((s) => s.setSubtitleStyle)
   const logoSettings = useProjectStore((s) => s.logoSettings)
+  const introVideoPath = useProjectStore((s) => s.introVideoPath)
+  const audioBackgroundPath = useProjectStore((s) => s.audioBackgroundPath)
   const { setClips, setDetecting, setError: setClipsError, reset } = useClipsStore()
   const [options, setOptions] = useState<ExportOptions>({
     mode: 'soft',
@@ -82,26 +84,34 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
         return
       }
 
-      // Write temp SRT
       const tmpDir = await window.api.files.getTmpDir()
       const srtPath = `${tmpDir}/export.srt`
       await window.api.files.writeFile(srtPath, srtContent)
 
+      // For audio-only projects, create a slideshow video first
+      let videoSource = project.videoPath
+      if (project.audioOnly) {
+        const slideshowPath = `${tmpDir}/slideshow.mp4`
+        await window.api.ffmpeg.createVideoFromAudio(project.videoPath, audioBackgroundPath, slideshowPath)
+        videoSource = slideshowPath
+      }
+
+      // Determine if we need to prepend an intro
+      const hasIntro = !!(introVideoPath && await window.api.files.exists(introVideoPath))
+
+      const savePath = await window.api.files.saveFile({
+        defaultPath: `${baseName}_${options.mode === 'soft' ? 'subtitled' : 'hardsub'}.mp4`,
+        filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+      })
+      if (!savePath) { setExporting(false); return }
+
+      const mainExportPath = hasIntro ? `${tmpDir}/main_export.mp4` : savePath
+
       if (options.mode === 'soft') {
-        const savePath = await window.api.files.saveFile({
-          defaultPath: `${baseName}_subtitled.mp4`,
-          filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
-        })
-        if (!savePath) { setExporting(false); return }
-        await window.api.ffmpeg.exportSoftSubs(project.videoPath, srtPath, savePath)
+        await window.api.ffmpeg.exportSoftSubs(videoSource, srtPath, mainExportPath)
       } else {
         const fontSizeMap = { small: 18, medium: 22, large: 28, xl: 38, xxl: 52 }
-        const savePath = await window.api.files.saveFile({
-          defaultPath: `${baseName}_hardsub.mp4`,
-          filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
-        })
-        if (!savePath) { setExporting(false); return }
-        await window.api.ffmpeg.exportHardSubs(project.videoPath, srtPath, savePath, {
+        await window.api.ffmpeg.exportHardSubs(videoSource, srtPath, mainExportPath, {
           fontSize: fontSizeMap[options.fontSize ?? 'medium'],
           position: options.position,
           background: options.background,
@@ -113,6 +123,11 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
           } : {}),
         })
       }
+
+      if (hasIntro) {
+        await window.api.ffmpeg.prependIntro(introVideoPath!, mainExportPath, savePath)
+      }
+
       setDone(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

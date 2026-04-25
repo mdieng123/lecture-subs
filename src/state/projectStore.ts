@@ -14,6 +14,8 @@ interface ProjectStore {
   hasGroqKey: boolean
   logoSettings: LogoSettings
   groqQuotaExhaustedAt: number | null
+  introVideoPath: string | null
+  audioBackgroundPath: string | null
 
   setScreen: (screen: AppScreen) => void
   setProject: (project: Project) => void
@@ -26,6 +28,8 @@ interface ProjectStore {
   setGroqQuotaExhaustedAt: (v: number | null) => void
   setSettings: (s: Partial<Settings>) => void
   setSubtitleStyle: (s: Partial<SubtitleStyle>) => void
+  setIntroVideoPath: (p: string | null) => void
+  setAudioBackgroundPath: (p: string | null) => void
 
   // Cue mutations (all go through history)
   updateCue: (id: string, patch: Partial<Omit<Cue, 'id'>>) => void
@@ -63,6 +67,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   hasGroqKey: false,
   logoSettings: { path: null, position: 'top-right', size: 'medium', opacity: 100, enabled: false },
   groqQuotaExhaustedAt: null,
+  introVideoPath: null,
+  audioBackgroundPath: null,
 
   setScreen: (screen) => set({ screen }),
   setProject: (project) => set({ project, screen: 'editor' }),
@@ -77,6 +83,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setLogoSettings: (s) => set((state) => ({ logoSettings: { ...state.logoSettings, ...s } })),
   setSettings: (s) => set((state) => ({ settings: { ...state.settings, ...s } })),
   setSubtitleStyle: (s) => set((state) => ({ subtitleStyle: { ...state.subtitleStyle, ...s } })),
+  setIntroVideoPath: (p) => set({ introVideoPath: p }),
+  setAudioBackgroundPath: (p) => set({ audioBackgroundPath: p }),
 
   updateCue: (id, patch) => {
     const { project } = get()

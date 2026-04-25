@@ -183,3 +183,59 @@ ipcMain.handle('files:deleteLogo', () => {
   return { ok: true }
 })
 
+const INTRO_VIDEO_DEST = path.join(app.getPath('userData'), 'intro-video.mp4')
+
+ipcMain.handle('files:pickIntroVideo', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose Intro Video',
+    filters: [{ name: 'Video Files', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi'] }],
+    properties: ['openFile'],
+  })
+  if (result.canceled || !result.filePaths[0]) return null
+  const src = result.filePaths[0]
+  fs.copyFileSync(src, INTRO_VIDEO_DEST)
+  return INTRO_VIDEO_DEST
+})
+
+ipcMain.handle('files:getIntroVideoPath', () => {
+  return fs.existsSync(INTRO_VIDEO_DEST) ? INTRO_VIDEO_DEST : null
+})
+
+ipcMain.handle('files:deleteIntroVideo', () => {
+  if (fs.existsSync(INTRO_VIDEO_DEST)) fs.unlinkSync(INTRO_VIDEO_DEST)
+  return { ok: true }
+})
+
+const AUDIO_BG_DEST = path.join(app.getPath('userData'), 'audio-bg.jpg')
+
+ipcMain.handle('files:pickAudioBackground', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose Audio Background Image',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    properties: ['openFile'],
+  })
+  if (result.canceled || !result.filePaths[0]) return null
+  const src = result.filePaths[0]
+  fs.copyFileSync(src, AUDIO_BG_DEST)
+  return AUDIO_BG_DEST
+})
+
+ipcMain.handle('files:getAudioBackgroundPath', () => {
+  return fs.existsSync(AUDIO_BG_DEST) ? AUDIO_BG_DEST : null
+})
+
+ipcMain.handle('files:deleteAudioBackground', () => {
+  if (fs.existsSync(AUDIO_BG_DEST)) fs.unlinkSync(AUDIO_BG_DEST)
+  return { ok: true }
+})
+
+ipcMain.handle('files:openAudio', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Open Audio File',
+    filters: [{ name: 'Audio Files', extensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'] }],
+    properties: ['openFile'],
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
+})
+
