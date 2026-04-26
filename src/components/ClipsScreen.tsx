@@ -28,7 +28,10 @@ export default function ClipsScreen() {
     reviewStore.setOpen(true)
     reviewStore.setStatus('analyzing')
     try {
-      const issues = await runScrutinize(clips.flatMap((clip) => clip.cues.map((c) => ({ id: c.id, arabic: c.arabic ?? '', english: c.english }))))
+      const issues = await runScrutinize(
+        clips.flatMap((clip) => clip.cues.map((c) => ({ id: c.id, arabic: c.arabic ?? '', english: c.english }))),
+        (cur, total) => { if (useReviewStore.getState().sessionId === sid) reviewStore.setBatchProgress(cur, total) }
+      )
       if (useReviewStore.getState().sessionId !== sid) return
       reviewStore.setIssues(issues)
       reviewStore.setStatus('done')
@@ -175,7 +178,11 @@ export default function ClipsScreen() {
             onClick={handleReview}
             className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
           >
-            {reviewStore.status === 'analyzing' ? 'Reviewing...' : 'Review'}
+            {reviewStore.status === 'analyzing'
+              ? reviewStore.batchProgress
+                ? `Reviewing ${reviewStore.batchProgress.current}/${reviewStore.batchProgress.total}...`
+                : 'Reviewing...'
+              : 'Review'}
             {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
               <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
                 {reviewStore.issues.filter((i) => i.status === 'pending').length}

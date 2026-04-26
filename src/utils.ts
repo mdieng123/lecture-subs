@@ -1,23 +1,38 @@
 import type { ReviewIssue } from './types'
 
+const SCRUTINIZE_BATCH = 100
+
 export async function runScrutinize(
-  cues: { id: string; arabic: string; english: string }[]
+  cues: { id: string; arabic: string; english: string }[],
+  onProgress?: (current: number, total: number) => void
 ): Promise<ReviewIssue[]> {
-  // Use numeric indices as IDs so Gemini can't mangle UUIDs
   const idMap = cues.map((c) => c.id)
-  const payload = cues.map((c, i) => ({ id: String(i), arabic: c.arabic, english: c.english }))
-  const result = await window.api.gemini.scrutinize(payload)
-  if (result.error) throw new Error(result.error)
-  return (result.issues ?? []).map((raw: any, i: number) => ({
-    id: `issue-${i}-${Date.now()}`,
-    cueId: idMap[parseInt(raw.cue_id)] ?? raw.cue_id,
-    type: raw.type,
-    problem: raw.problem,
-    suggestedArabic: raw.suggested_arabic || undefined,
-    suggestedEnglish: raw.suggested_english || undefined,
-    confidence: raw.confidence,
-    status: 'pending' as const,
-  }))
+  const totalBatches = Math.ceil(cues.length / SCRUTINIZE_BATCH)
+  const allIssues: ReviewIssue[] = []
+
+  for (let b = 0; b < totalBatches; b++) {
+    const offset = b * SCRUTINIZE_BATCH
+    const batch = cues.slice(offset, offset + SCRUTINIZE_BATCH)
+    // Use global numeric indices so cue_id maps back correctly across batches
+    const payload = batch.map((c, j) => ({ id: String(offset + j), arabic: c.arabic, english: c.english }))
+    const result = await window.api.gemini.scrutinize(payload)
+    if (result.error) throw new Error(result.error)
+    for (const raw of result.issues ?? []) {
+      allIssues.push({
+        id: `issue-${offset}-${raw.cue_id}-${Date.now()}`,
+        cueId: idMap[parseInt(raw.cue_id)] ?? raw.cue_id,
+        type: raw.type,
+        problem: raw.problem,
+        suggestedArabic: raw.suggested_arabic || undefined,
+        suggestedEnglish: raw.suggested_english || undefined,
+        confidence: raw.confidence,
+        status: 'pending' as const,
+      })
+    }
+    onProgress?.(b + 1, totalBatches)
+  }
+
+  return allIssues
 }
 
 export function formatDuration(seconds: number): string {

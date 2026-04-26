@@ -7,6 +7,7 @@ interface ReviewState {
   error: string | null
   open: boolean
   sessionId: number
+  batchProgress: { current: number; total: number } | null
 }
 
 interface ReviewActions {
@@ -15,6 +16,7 @@ interface ReviewActions {
   setError: (e: string | null) => void
   setOpen: (v: boolean) => void
   startSession: () => number
+  setBatchProgress: (current: number, total: number) => void
   approveIssue: (id: string) => void
   dismissIssue: (id: string) => void
   approveAllByType: (type: ReviewIssue['type']) => void
@@ -27,15 +29,17 @@ export const useReviewStore = create<ReviewState & ReviewActions>((set) => ({
   error: null,
   open: false,
   sessionId: 0,
+  batchProgress: null,
 
   setIssues: (issues) => set({ issues }),
   setStatus: (status) => set({ status }),
   setError: (error) => set({ error }),
   setOpen: (open) => set({ open }),
+  setBatchProgress: (current, total) => set({ batchProgress: { current, total } }),
 
   startSession: () => {
     const id = Date.now()
-    set({ sessionId: id, issues: [], status: 'idle', error: null })
+    set({ sessionId: id, issues: [], status: 'idle', error: null, batchProgress: null })
     return id
   },
 
@@ -52,5 +56,5 @@ export const useReviewStore = create<ReviewState & ReviewActions>((set) => ({
       ),
     })),
 
-  reset: () => set({ issues: [], status: 'idle', error: null, open: false, sessionId: 0 }),
+  reset: () => set({ issues: [], status: 'idle', error: null, open: false, sessionId: 0, batchProgress: null }),
 }))
