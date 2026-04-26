@@ -38,7 +38,7 @@ type Filter = 'all' | ReviewIssue['type']
 
 
 export default function ReviewPanel({ videoPath, getAbsoluteTime, onClose, onRerun, getCue, onApplyFix, getContext, onMarkDirty }: Props) {
-  const { issues, status, error, approveIssue, dismissIssue, approveAllByType } = useReviewStore()
+  const { issues, status, error, batchProgress, approveIssue, dismissIssue, approveAllByType } = useReviewStore()
   const [filter, setFilter] = useState<Filter>('all')
   const [focusedIdx, setFocusedIdx] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -162,7 +162,19 @@ export default function ReviewPanel({ videoPath, getAbsoluteTime, onClose, onRer
         {status === 'analyzing' && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-16">
             <div className="w-8 h-8 border-2 border-[hsl(210,80%,55%)] border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[hsl(215,15%,50%)]">Gemini is reviewing the transcript...</p>
+            <p className="text-sm text-[hsl(215,15%,50%)]">
+              {batchProgress
+                ? `Reviewing batch ${batchProgress.current} of ${batchProgress.total}...`
+                : 'Gemini is reviewing the transcript...'}
+            </p>
+            {batchProgress && (
+              <div className="w-48 h-1.5 bg-[hsl(222,20%,20%)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[hsl(210,80%,55%)] rounded-full transition-all duration-300"
+                  style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                />
+              </div>
+            )}
           </div>
         )}
 
