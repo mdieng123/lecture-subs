@@ -7,6 +7,7 @@ const INTRO_MAX_SECONDS = 20
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const settings = useProjectStore((s) => s.settings)
   const setSettings = useProjectStore((s) => s.setSettings)
+  const hasApiKey = useProjectStore((s) => s.hasApiKey)
   const setHasApiKey = useProjectStore((s) => s.setHasApiKey)
   const setStoreHasGroqKey = useProjectStore((s) => s.setHasGroqKey)
 
@@ -78,6 +79,9 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           <div>
             <label className="block text-sm font-medium mb-2 text-[hsl(210,20%,80%)]">
               Gemini API Key
+              <span className="ml-2 text-xs font-normal text-[hsl(130,50%,55%)]">
+                {hasApiKey ? '● active' : ''}
+              </span>
             </label>
             <div className="flex gap-2">
               <input
