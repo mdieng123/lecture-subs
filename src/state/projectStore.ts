@@ -66,6 +66,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     position: 'bottom',
     background: 'semi',
     includeArabic: false,
+    clipBg: 'blur',
   },
   processing: null,
   hasApiKey: false,

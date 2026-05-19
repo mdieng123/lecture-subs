@@ -215,7 +215,7 @@ ipcMain.handle('ffmpeg:exportClip', (
   startSeconds: number,
   durationSeconds: number,
   outputPath: string,
-  opts: { fontSize?: number; position?: 'bottom' | 'center' | 'top'; background?: 'none' | 'semi' | 'solid'; logoPath?: string; logoPosition?: string; logoSize?: string; logoOpacity?: number }
+  opts: { fontSize?: number; position?: 'bottom' | 'center' | 'top'; background?: 'none' | 'semi' | 'solid'; clipBg?: 'blur' | 'black' | 'white' | 'crop'; logoPath?: string; logoPosition?: string; logoSize?: string; logoOpacity?: number }
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const win = getMainWindow()
@@ -234,6 +234,23 @@ ipcMain.handle('ffmpeg:exportClip', (
       .setStartTime(startSeconds)
       .setDuration(durationSeconds)
 
+    const clipBg = opts.clipBg ?? 'blur'
+    const bgColor = clipBg === 'white' ? 'white' : 'black'
+    // Build the video layout filter for 9:16 output
+    let layoutFilter: string
+    if (clipBg === 'crop') {
+      layoutFilter = 'crop=ih*9/16:ih'
+    } else if (clipBg === 'blur') {
+      layoutFilter = [
+        'split=2[bg][fg]',
+        '[bg]scale=ih*9/16:ih:force_original_aspect_ratio=increase,crop=ih*9/16:ih,boxblur=20:5,setsar=1[blurred]',
+        '[fg]scale=ih*9/16:ih:force_original_aspect_ratio=decrease,pad=ih*9/16:ih:(ow-iw)/2:(oh-ih)/2:black@0,setsar=1[padded]',
+        '[blurred][padded]overlay=0:0',
+      ].join(';')
+    } else {
+      layoutFilter = `scale=ih*9/16:ih:force_original_aspect_ratio=decrease,pad=ih*9/16:ih:(ow-iw)/2:(oh-ih)/2:${bgColor}`
+    }
+
     if (opts.logoPath && fs.existsSync(opts.logoPath)) {
       const logoW = opts.logoSize === 'small' ? 55 : opts.logoSize === 'large' ? 130 : 85
       const lx = opts.logoPosition?.includes('right') ? 'W-w-10' : '10'
@@ -242,18 +259,28 @@ ipcMain.handle('ffmpeg:exportClip', (
       const logoScale = alpha < 1
         ? `[1:v]scale=${logoW}:-1,format=rgba,colorchannelmixer=aa=${alpha}[logo]`
         : `[1:v]scale=${logoW}:-1[logo]`
+      const layoutWithSubtitle = clipBg === 'blur'
+        ? `[0:v]${layoutFilter}[laid];[laid]${subtitleFilter}[subbed]`
+        : `[0:v]${layoutFilter},${subtitleFilter}[subbed]`
       cmd.input(opts.logoPath)
         .outputOptions([
           '-filter_complex',
-          `[0:v]crop=ih*9/16:ih,${subtitleFilter}[subbed];${logoScale};[subbed][logo]overlay=${lx}:${ly}`,
+          `${layoutWithSubtitle};${logoScale};[subbed][logo]overlay=${lx}:${ly}`,
           '-map', '0:a',
           '-preset medium', '-crf 22', '-pix_fmt yuv420p',
         ])
         .videoCodec('libx264').audioCodec('aac')
     } else {
-      cmd.videoFilters(['crop=ih*9/16:ih', subtitleFilter])
-        .videoCodec('libx264').audioCodec('aac')
-        .outputOptions(['-preset medium', '-crf 22', '-pix_fmt yuv420p'])
+      if (clipBg === 'blur') {
+        cmd.outputOptions([
+          '-filter_complex', `[0:v]${layoutFilter}[laid];[laid]${subtitleFilter}`,
+          '-preset medium', '-crf 22', '-pix_fmt yuv420p',
+        ]).videoCodec('libx264').audioCodec('aac')
+      } else {
+        cmd.videoFilters([layoutFilter, subtitleFilter])
+          .videoCodec('libx264').audioCodec('aac')
+          .outputOptions(['-preset medium', '-crf 22', '-pix_fmt yuv420p'])
+      }
     }
 
     cmd.output(outputPath)

@@ -133,6 +133,7 @@ export default function ClipsScreen() {
             fontSize: FONT_SIZE_PX[style.fontSize] ?? 18,
             position: style.position,
             background: style.background,
+            clipBg: style.clipBg ?? 'blur',
             ...(logo.enabled && logo.path ? { logoPath: logo.path, logoPosition: logo.position, logoSize: logo.size, logoOpacity: logo.opacity } : {}),
           }
         )
@@ -257,7 +258,7 @@ export default function ClipsScreen() {
         </div>
       )}
 
-      <SubtitleStyleBar />
+      <SubtitleStyleBar showClipBg />
 
       {exportError && (
         <div className="px-4 py-2 bg-red-900/30 border-b border-red-700/40 text-red-400 text-xs flex-shrink-0">
@@ -307,6 +308,7 @@ function ClipCard({ clip }: { clip: Clip }) {
   const subtitleStyle = useProjectStore((s) => s.subtitleStyle)
   const logo = useProjectStore((s) => s.logoSettings)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const bgVideoRef = useRef<HTMLVideoElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [playing, setPlaying] = useState(false)
@@ -329,9 +331,11 @@ function ClipCard({ clip }: { clip: Clip }) {
       if (el!.currentTime >= clip.endSeconds) {
         el!.pause()
         el!.currentTime = clip.startSeconds
+        if (bgVideoRef.current) { bgVideoRef.current.pause(); bgVideoRef.current.currentTime = clip.startSeconds }
         setPlaying(false)
         setRelativeTime(0)
       } else {
+        if (bgVideoRef.current) bgVideoRef.current.currentTime = el!.currentTime
         setRelativeTime(Math.max(0, el!.currentTime - clip.startSeconds))
       }
       rafRef.current = requestAnimationFrame(tick)
@@ -342,9 +346,13 @@ function ClipCard({ clip }: { clip: Clip }) {
 
   function togglePlay() {
     const el = videoRef.current
+    const bg = bgVideoRef.current
     if (!el) return
-    if (el.paused) { el.play(); setPlaying(true) }
-    else { el.pause(); setPlaying(false) }
+    if (el.paused) {
+      el.play(); bg?.play(); setPlaying(true)
+    } else {
+      el.pause(); bg?.pause(); setPlaying(false)
+    }
   }
 
   const videoSrc = toFileUrl(project?.videoPath ?? '')
@@ -352,12 +360,22 @@ function ClipCard({ clip }: { clip: Clip }) {
   return (
     <div className={`flex flex-col rounded-lg border transition-colors ${clip.selected ? 'border-[hsl(210,60%,45%)] bg-[hsl(222,20%,14%)]' : 'border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)]'}`}>
       {/* 9:16 video preview */}
-      <div className="relative cursor-pointer" style={{ aspectRatio: '9/16', maxHeight: '52vh', overflow: 'hidden', borderRadius: '0.5rem 0.5rem 0 0' }} onClick={togglePlay}>
+      <div className="relative cursor-pointer" style={{ aspectRatio: '9/16', maxHeight: '52vh', overflow: 'hidden', borderRadius: '0.5rem 0.5rem 0 0', background: subtitleStyle.clipBg === 'white' ? '#fff' : '#000' }} onClick={togglePlay}>
+        {subtitleStyle.clipBg === 'blur' && (
+          <video
+            ref={bgVideoRef}
+            src={videoSrc}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ objectFit: 'cover', filter: 'blur(18px) brightness(0.55)', transform: 'scale(1.08)' }}
+            muted
+            preload="metadata"
+          />
+        )}
         <video
           ref={videoRef}
           src={videoSrc}
           className="w-full h-full"
-          style={{ objectFit: 'cover' }}
+          style={{ objectFit: subtitleStyle.clipBg === 'crop' ? 'cover' : 'contain', position: 'relative' }}
           preload="metadata"
           muted={false}
         />

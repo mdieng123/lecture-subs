@@ -1,7 +1,7 @@
 import { useProjectStore } from '../state/projectStore'
 import type { SubtitleStyle, LogoSettings } from '../types'
 
-export default function SubtitleStyleBar() {
+export default function SubtitleStyleBar({ showClipBg }: { showClipBg?: boolean } = {}) {
   const style = useProjectStore((s) => s.subtitleStyle)
   const setSubtitleStyle = useProjectStore((s) => s.setSubtitleStyle)
   const logo = useProjectStore((s) => s.logoSettings)
@@ -42,6 +42,22 @@ export default function SubtitleStyleBar() {
       >
         Arabic {style.includeArabic ? 'on' : 'off'}
       </button>
+
+      {showClipBg && (
+        <>
+          <div className="w-px h-4 bg-[hsl(220,15%,28%)] mx-1" />
+          <span className="text-[10px] text-[hsl(215,15%,40%)] uppercase tracking-wider mr-1">Clip BG</span>
+          {(['blur', 'black', 'white', 'crop'] as const).map((v) => (
+            <button
+              key={v}
+              className={style.clipBg === v ? activeBtn : btnClass}
+              onClick={() => setSubtitleStyle({ clipBg: v })}
+            >
+              {v === 'blur' ? '🌫 Blur' : v === 'black' ? '⬛ Black' : v === 'white' ? '⬜ White' : '✂ Crop'}
+            </button>
+          ))}
+        </>
+      )}
 
       {/* Logo controls — only shown when logo is uploaded */}
       {logo.path && (

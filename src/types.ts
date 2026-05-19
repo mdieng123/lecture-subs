@@ -90,6 +90,7 @@ export interface SubtitleStyle {
   position: 'bottom' | 'center' | 'top';
   background: 'none' | 'semi' | 'solid';
   includeArabic: boolean;
+  clipBg: 'blur' | 'black' | 'white' | 'crop';
 }
 
 export interface LogoSettings {
