@@ -75,7 +75,7 @@ export default function ImportScreen() {
 
     try {
       const downloadsDir = await window.api.files.getDownloadsDir()
-      const ytDir = `${downloadsDir}/yt-${Date.now()}`
+      const ytDir = `${downloadsDir.replace(/[\\/]$/, '')}/yt-${Date.now()}`
       const { filePath, title } = await window.api.youtube.download(url, ytDir)
       if (cancelRef.current) return
       await loadVideo(filePath, title, url)
@@ -218,7 +218,7 @@ export default function ImportScreen() {
     cancelRef.current = false
     try {
       const downloadsDir = await window.api.files.getDownloadsDir()
-      const ytDir = `${downloadsDir}/yt-${Date.now()}`
+      const ytDir = `${downloadsDir.replace(/[\\/]$/, '')}/yt-${Date.now()}`
       const { filePath: newVideoPath } = await window.api.youtube.download(youtubeUrl, ytDir)
       if (cancelRef.current) return
       refreshDownloads()

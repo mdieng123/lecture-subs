@@ -30,7 +30,7 @@ ipcMain.handle('youtube:download', (_event, url: string, outputDir: string): Pro
     const win = getMainWindow()
     let title = ''
 
-    const ffmpegDir = ffmpegStatic ? path.dirname(ffmpegStatic) : ''
+    const ffmpegDir = ffmpegStatic ? path.dirname(ffmpegStatic.replace(/app\.asar([/\\])/, 'app.asar.unpacked$1')) : ''
 
     const proc = spawn(ytdlp, [
       url,

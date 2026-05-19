@@ -5,10 +5,14 @@ import ffprobeStatic from 'ffprobe-static'
 import path from 'path'
 import fs from 'fs'
 
-if (ffmpegStatic) {
-  ffmpeg.setFfmpegPath(ffmpegStatic)
+function unpackedPath(p: string): string {
+  return p.replace(/app\.asar([/\\])/, 'app.asar.unpacked$1')
 }
-ffmpeg.setFfprobePath(ffprobeStatic.path)
+
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(unpackedPath(ffmpegStatic))
+}
+ffmpeg.setFfprobePath(unpackedPath(ffprobeStatic.path))
 
 function sendProgress(win: BrowserWindow | null, data: unknown) {
   if (win && !win.isDestroyed()) {
