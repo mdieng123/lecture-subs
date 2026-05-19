@@ -53,7 +53,8 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "!landing-page/**"
     ],
     "asarUnpack": [
       "node_modules/ffmpeg-static/**",
