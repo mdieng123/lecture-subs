@@ -101,16 +101,6 @@
       to   { opacity: 1;   transform: scale(1.04); }
     }
 
-    .hero-eyebrow {
-      font-size: 0.72rem;
-      font-weight: 500;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--teal);
-      margin-bottom: 1.5rem;
-      position: relative;
-    }
-
     .hero h1 {
       font-size: clamp(2.6rem, 6.5vw, 5.2rem);
       font-weight: 700;
@@ -122,21 +112,20 @@
 
     .hero h1 em {
       font-style: normal;
-      background: linear-gradient(135deg, var(--blue) 0%, var(--teal) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: #fff;
     }
 
     .hero-sub {
-      margin-top: 1.6rem;
-      font-size: clamp(1rem, 2vw, 1.15rem);
+      margin-top: 1.8rem;
+      font-size: clamp(0.95rem, 1.8vw, 1.08rem);
       color: var(--muted);
-      max-width: 520px;
+      max-width: 620px;
       font-weight: 400;
-      line-height: 1.7;
+      line-height: 1.85;
       position: relative;
     }
+
+    .hero-sub p + p { margin-top: 1rem; }
 
     .download-row {
       display: flex;
@@ -452,11 +441,12 @@
 
   <!-- Hero -->
   <section class="hero">
-    <p class="hero-eyebrow reveal">For the Scholars of the Sunnah</p>
-    <h1 class="reveal reveal-d1">The knowledge of the scholars,<br /><em>in the language of your people.</em></h1>
-    <p class="hero-sub reveal reveal-d2">
-      LectureSubs transcribes and translates Arabic Islamic lectures into accurate English subtitles — built specifically for the methodology of the Salaf.
-    </p>
+    <h1 class="reveal">Carry the words of the scholars<br /><em>to those who cannot yet reach them in Arabic.</em></h1>
+    <div class="hero-sub reveal reveal-d1">
+      <p>The scholars of Ahlus-Sunnah — those who hold to the way of the Salaf as-Saleh — have produced and continue to produce a vast body of beneficial knowledge. For Arabic speakers, this knowledge is within reach. For everyone else, the door has remained largely closed.</p>
+      <p>LectureSubs is a desktop tool that opens that door. Load any Arabic lecture and it will transcribe the speech word by word and translate it into English subtitles, preserving the meaning and tone of what was actually said. From there, you review, refine, and share. What once demanded days of manual effort can now be done in the time it takes to watch the lecture once.</p>
+      <p>Every lecture made accessible is a chance for someone, somewhere, to benefit from it. May Allah accept it.</p>
+    </div>
 
     <div class="download-row reveal reveal-d3" id="download">
       <a href="#" class="btn-download btn-mac" id="btn-mac">
@@ -499,7 +489,7 @@
       <span class="hadith-ornament-line"></span>
     </div>
     <p class="hadith-arabic reveal reveal-d1">
-      «بَلِّغُوا عَنِّي وَلَوْ آيَةً»
+      بَلِّغُوا عَنِّي وَلَوْ آيَةً
     </p>
     <p class="hadith-translation reveal reveal-d2">
       "Convey from me, even if it is one verse."
@@ -520,7 +510,7 @@
       </div>
       <div class="warning-body">
         <p>
-          LectureSubs uses AI for transcription and translation. While accuracy is high, AI <strong>will make mistakes</strong> — especially with rare Islamic terminology, scholar names, hadith chains, Quranic quotations, and nuanced fiqh discussions. A mistranslation can alter meaning in ways that are subtle and difficult to detect.
+          LectureSubs produces consistently high-quality output across most content. That said, AI is not infallible — errors occur, and in religious content a mistranslation carries weight. Treat the output as a strong first draft, not a finished product.
         </p>
         <p>
           Before publishing or sharing any subtitled video, you are <strong>personally responsible</strong> for verifying the output. Use the built-in <strong>Review AI</strong> feature inside the app, then watch the full video yourself to confirm the subtitles match what was actually said. Do not rely on the AI output alone, and never distribute content you have not personally reviewed.
