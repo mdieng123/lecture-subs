@@ -36,6 +36,7 @@ export default function ImportScreen() {
   const [downloads, setDownloads] = useState<{ name: string; path: string; createdAt: number; url?: string }[]>([])
   const [pendingRestore, setPendingRestore] = useState<{ type: 'clips' | 'segments'; rawJson: string; filePath: string; youtubeUrl: string } | null>(null)
   const [pendingProjectRestore, setPendingProjectRestore] = useState<{ rawJson: string; projectFilePath: string; originalName: string; audioOnly: boolean; youtubeUrl?: string } | null>(null)
+  const [restoreYtUrl, setRestoreYtUrl] = useState('')
   const [recovery, setRecovery] = useState<{ videoPath: string; cueCount: number; savedAt: number; raw: string } | null>(null)
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const cancelRef = useRef(false)
@@ -286,18 +287,43 @@ export default function ImportScreen() {
   }
 
   async function handleProjectRestoreRedownload() {
-    if (!pendingProjectRestore?.youtubeUrl) return
-    const { youtubeUrl } = pendingProjectRestore
+    const url = (pendingProjectRestore?.youtubeUrl || restoreYtUrl).trim()
+    if (!url) return
     setYtDownloading(true)
     setYtStatus('Starting download...')
     cancelRef.current = false
     try {
       const downloadsDir = await window.api.files.getDownloadsDir()
       const ytDir = `${downloadsDir.replace(/[\\/]$/, '')}/yt-${Date.now()}`
-      const { filePath: newVideoPath } = await window.api.youtube.download(youtubeUrl, ytDir)
+      const { filePath: newVideoPath } = await window.api.youtube.download(url, ytDir)
       if (cancelRef.current) return
       refreshDownloads()
       await handleProjectRestoreFinish(newVideoPath)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setYtDownloading(false)
+      setYtStatus('')
+    }
+  }
+
+  async function handlePendingRestoreYtDownload(url: string) {
+    if (!pendingRestore || !url.trim()) return
+    setYtDownloading(true)
+    setYtStatus('Starting download...')
+    cancelRef.current = false
+    try {
+      const downloadsDir = await window.api.files.getDownloadsDir()
+      const ytDir = `${downloadsDir.replace(/[\\/]$/, '')}/yt-${Date.now()}`
+      const { filePath: newVideoPath } = await window.api.youtube.download(url.trim(), ytDir)
+      if (cancelRef.current) return
+      refreshDownloads()
+      const data = JSON.parse(pendingRestore.rawJson)
+      data.videoPath = newVideoPath
+      const { type, filePath } = pendingRestore
+      setPendingRestore(null)
+      if (type === 'clips') await loadClipsFile(JSON.stringify(data), filePath)
+      else await loadSegmentsFile(JSON.stringify(data), filePath)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -605,66 +631,88 @@ export default function ImportScreen() {
 
         {pendingProjectRestore && (
           <div className="w-full max-w-xl px-4 py-4 bg-amber-900/25 border border-amber-700/40 rounded-lg flex flex-col gap-3">
-            <p className="text-sm text-amber-300 font-medium">
-              {pendingProjectRestore.audioOnly ? 'Audio' : 'Video'} file not found on this device
-            </p>
-            <p className="text-xs text-amber-400/80 leading-relaxed">
-              The original file <span className="font-mono text-amber-300">"{pendingProjectRestore.originalName}"</span> isn't on this machine.
-              To open this project, locate a {pendingProjectRestore.audioOnly ? 'audio' : 'video'} file of the <strong className="text-amber-300">same length</strong> as the original — the filename can be different, as long as it's the same source recording.
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {pendingProjectRestore.youtubeUrl && (
-                <button
-                  onClick={handleProjectRestoreRedownload}
-                  disabled={ytDownloading}
-                  className="px-3 py-1.5 text-xs rounded bg-amber-700 hover:bg-amber-600 text-white font-medium disabled:opacity-40"
-                >
-                  {ytDownloading ? ytStatus || 'Downloading...' : 'Download from YouTube'}
-                </button>
-              )}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm text-amber-300 font-medium">
+                  {pendingProjectRestore.audioOnly ? 'Audio' : 'Video'} file not found on this device
+                </p>
+                <p className="text-xs text-amber-400/70 mt-1 leading-relaxed">
+                  Original: <span className="font-mono text-amber-300">"{pendingProjectRestore.originalName}"</span> — provide any {pendingProjectRestore.audioOnly ? 'audio' : 'video'} file of the <strong className="text-amber-300">same length</strong> (filename can differ).
+                </p>
+              </div>
+              <button onClick={() => setPendingProjectRestore(null)} className="text-xs text-amber-700 hover:text-amber-400 flex-shrink-0">✕</button>
+            </div>
+            <button
+              onClick={handleProjectRestoreBrowse}
+              className="px-3 py-1.5 text-xs rounded border border-amber-700/50 text-amber-400 hover:text-white hover:border-amber-600 self-start"
+            >
+              Find on device
+            </button>
+            <div className="flex gap-2">
+              <input
+                value={pendingProjectRestore.youtubeUrl || restoreYtUrl}
+                onChange={(e) => setRestoreYtUrl(e.target.value)}
+                readOnly={!!pendingProjectRestore.youtubeUrl}
+                placeholder="YouTube URL…"
+                className="flex-1 bg-[hsl(222,20%,9%)] border border-amber-700/40 rounded px-2.5 py-1.5 text-xs text-white placeholder-amber-900/80 focus:outline-none focus:border-amber-600"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleProjectRestoreRedownload() }}
+              />
               <button
-                onClick={handleProjectRestoreBrowse}
-                className="px-3 py-1.5 text-xs rounded border border-amber-700/50 text-amber-400 hover:text-white hover:border-amber-600"
+                onClick={handleProjectRestoreRedownload}
+                disabled={ytDownloading || !(pendingProjectRestore.youtubeUrl || restoreYtUrl.trim())}
+                className="px-3 py-1.5 text-xs rounded bg-amber-700 hover:bg-amber-600 text-white font-medium disabled:opacity-40"
               >
-                Find on device
+                {ytDownloading ? ytStatus || 'Downloading…' : 'Download'}
               </button>
-              <button onClick={() => setPendingProjectRestore(null)} className="ml-auto text-xs text-amber-600 hover:text-amber-400">Dismiss</button>
             </div>
           </div>
         )}
 
         {pendingRestore && (
           <div className="w-full max-w-xl px-4 py-4 bg-amber-900/25 border border-amber-700/40 rounded-lg flex flex-col gap-3">
-            <p className="text-sm text-amber-300 font-medium">Video file not found on this device</p>
-            <p className="text-xs text-amber-400/80 leading-relaxed">
-              The original file isn't on this machine. You need a {pendingRestore.type === 'clips' ? 'video' : 'video'} file of the <strong className="text-amber-300">same length</strong> as the original — the filename can be different.
-              {pendingRestore.youtubeUrl ? ' You can re-download it from YouTube, or locate it manually.' : ''}
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {pendingRestore.youtubeUrl && (
-                <button
-                  onClick={handlePendingRedownload}
-                  disabled={ytDownloading}
-                  className="px-3 py-1.5 text-xs rounded bg-amber-700 hover:bg-amber-600 text-white font-medium disabled:opacity-40"
-                >
-                  {ytDownloading ? ytStatus || 'Downloading...' : 'Download from YouTube'}
-                </button>
-              )}
-              <button
-                onClick={async () => {
-                  const picked = await window.api.files.openAny()
-                  if (!picked) return
-                  const data = JSON.parse(pendingRestore.rawJson)
-                  data.videoPath = picked
-                  setPendingRestore(null)
-                  if (pendingRestore.type === 'clips') await loadClipsFile(JSON.stringify(data), pendingRestore.filePath)
-                  else await loadSegmentsFile(JSON.stringify(data), pendingRestore.filePath)
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm text-amber-300 font-medium">Video file not found on this device</p>
+                <p className="text-xs text-amber-400/70 mt-1 leading-relaxed">
+                  Provide any video of the <strong className="text-amber-300">same length</strong> as the original — filename can differ.
+                </p>
+              </div>
+              <button onClick={() => setPendingRestore(null)} className="text-xs text-amber-700 hover:text-amber-400 flex-shrink-0">✕</button>
+            </div>
+            <button
+              onClick={async () => {
+                const picked = await window.api.files.openAny()
+                if (!picked) return
+                const data = JSON.parse(pendingRestore.rawJson)
+                data.videoPath = picked
+                setPendingRestore(null)
+                if (pendingRestore.type === 'clips') await loadClipsFile(JSON.stringify(data), pendingRestore.filePath)
+                else await loadSegmentsFile(JSON.stringify(data), pendingRestore.filePath)
+              }}
+              className="px-3 py-1.5 text-xs rounded border border-amber-700/50 text-amber-400 hover:text-white hover:border-amber-600 self-start"
+            >
+              Find on device
+            </button>
+            <div className="flex gap-2">
+              <input
+                defaultValue={pendingRestore.youtubeUrl || ''}
+                placeholder="YouTube URL…"
+                id="restore-yt-input"
+                className="flex-1 bg-[hsl(222,20%,9%)] border border-amber-700/40 rounded px-2.5 py-1.5 text-xs text-white placeholder-amber-900/80 focus:outline-none focus:border-amber-600"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handlePendingRestoreYtDownload((e.target as HTMLInputElement).value)
                 }}
-                className="px-3 py-1.5 text-xs rounded border border-amber-700/50 text-amber-400 hover:text-white hover:border-amber-600"
+              />
+              <button
+                onClick={() => {
+                  const el = document.getElementById('restore-yt-input') as HTMLInputElement | null
+                  if (el) handlePendingRestoreYtDownload(el.value)
+                }}
+                disabled={ytDownloading}
+                className="px-3 py-1.5 text-xs rounded bg-amber-700 hover:bg-amber-600 text-white font-medium disabled:opacity-40"
               >
-                Find on device
+                {ytDownloading ? ytStatus || 'Downloading…' : 'Download'}
               </button>
-              <button onClick={() => setPendingRestore(null)} className="ml-auto text-xs text-amber-600 hover:text-amber-400">Dismiss</button>
             </div>
           </div>
         )}
