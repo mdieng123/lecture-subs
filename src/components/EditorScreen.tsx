@@ -2,19 +2,19 @@ import { useState, useRef, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useProjectStore } from '../state/projectStore'
 import { useSegmentsStore, buildSegmentsFromSuggestions } from '../state/segmentsStore'
+import { useClipsStore } from '../state/clipsStore'
 import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import { runScrutinize } from '../utils'
 import type { SegmentDurationRange, ReviewIssue, Cue, ManualMedia } from '../types'
 import VideoPreview from './VideoPreview'
 import CueList from './CueList'
-import SubtitleTimeline from './SubtitleTimeline'
 import ExportDialog from './ExportDialog'
 import SettingsDialog from './SettingsDialog'
 import ReviewPanel from './ReviewPanel'
 import CreateMediaDialog from './CreateMediaDialog'
 import ManualMediaStrip from './ManualMediaStrip'
-import ManualMediaExportDialog from './ManualMediaExportDialog'
+
 
 const MAX_CUE_DURATION = 7
 
@@ -68,18 +68,31 @@ export default function EditorScreen() {
   const [segmentModalOpen, setSegmentModalOpen] = useState(false)
   const [durationRange, setDurationRange] = useState<SegmentDurationRange>('7-10')
   const [createMediaPending, setCreateMediaPending] = useState<{ start: number; end: number } | null>(null)
-  const [mediaExportOpen, setMediaExportOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const reviewStore = useReviewStore()
   const addManualMedia = useProjectStore((s) => s.addManualMedia)
   const deleteManualMedia = useProjectStore((s) => s.deleteManualMedia)
-  const toggleManualMediaSelected = useProjectStore((s) => s.toggleManualMediaSelected)
+  const clipsStore = useClipsStore()
 
   const handleSeek = useCallback((time: number) => {
     if (videoRef.current) {
       videoRef.current.currentTime = time
     }
   }, [])
+
+  function openManualMedia(item: ManualMedia) {
+    if (item.kind === 'clip') {
+      clipsStore.reset()
+      clipsStore.setClips([{ id: item.id, title: item.title, reason: '', startSeconds: item.startSeconds, endSeconds: item.endSeconds, cues: item.cues, selected: true }])
+      clipsStore.setReturnScreen('editor')
+      setScreen('clips')
+    } else {
+      useSegmentsStore.getState().reset()
+      useSegmentsStore.getState().setSegments([{ id: item.id, title: item.title, topicSummary: '', startSeconds: item.startSeconds, endSeconds: item.endSeconds, cues: item.cues, selected: true }])
+      useSegmentsStore.getState().setReturnScreen('editor')
+      setScreen('youtube')
+    }
+  }
 
   async function handleSave() {
     if (!project) return
@@ -228,14 +241,6 @@ export default function EditorScreen() {
                 ⚠ Not reviewed
               </span>
             )}
-            {(project.manualMedia ?? []).length > 0 && (
-              <button
-                onClick={() => setMediaExportOpen(true)}
-                className="px-3 py-1.5 text-sm rounded border border-teal-600/50 text-teal-300 hover:bg-teal-600/20 transition-colors"
-              >
-                Export Media ({(project.manualMedia ?? []).filter((m) => m.selected).length}/{(project.manualMedia ?? []).length})
-              </button>
-            )}
             <button
               onClick={() => setExportOpen(true)}
               className="px-4 py-1.5 text-sm rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white font-medium transition-colors"
@@ -285,60 +290,34 @@ export default function EditorScreen() {
         </div>
       </div>
 
-      {/* Bottom panel */}
-      <div className="flex-shrink-0 border-t border-[hsl(220,15%,22%)] flex flex-col">
-        {/* Cue timing waveform (thin) */}
-        <div className="h-20">
-          <SubtitleTimeline
-            audioPath={project.audioPath}
-            cues={project.cues}
-            currentTime={currentTime}
-            duration={project.durationSeconds}
-            selectedCueId={selectedCueId}
-            onSeek={handleSeek}
-            onSelectCue={setSelectedCueId}
-          />
-        </div>
-
-        {/* Clip / Segment creator bar */}
-        <div className="flex items-center gap-3 px-3 py-2 border-t border-[hsl(220,15%,18%)] bg-[hsl(222,20%,10%)]">
+      {/* Bottom panel: clip/segment creator */}
+      <div className="flex-shrink-0 border-t border-[hsl(220,15%,22%)] bg-[hsl(222,20%,10%)] flex flex-col">
+        <div className="flex items-center gap-3 px-3 py-2.5">
           <span className="text-[11px] text-[hsl(215,15%,40%)] font-medium">Create from current time:</span>
           <button
             onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 60) })}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 border border-purple-500/40 text-purple-300 text-xs font-medium hover:bg-purple-600/35 transition-colors"
           >
-            <span>▬</span> New Clip (9:16)
+            ▬ New Clip (9:16)
           </button>
           <button
             onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 300) })}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs font-medium hover:bg-blue-600/35 transition-colors"
           >
-            <span>⬛</span> New Segment (16:9)
+            ⬛ New Segment (16:9)
           </button>
-          {(project.manualMedia ?? []).length > 0 && (
-            <span className="ml-auto text-[10px] text-[hsl(215,15%,40%)]">
-              {(project.manualMedia ?? []).length} item{(project.manualMedia ?? []).length !== 1 ? 's' : ''} created
-            </span>
-          )}
         </div>
-
-        {/* Created media cards */}
         <ManualMediaStrip
           items={project.manualMedia ?? []}
           videoPath={project.videoPath}
-          onToggleSelect={toggleManualMediaSelected}
+          onOpen={openManualMedia}
           onDelete={deleteManualMedia}
         />
       </div>
 
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
-      {mediaExportOpen && (
-        <ManualMediaExportDialog
-          items={project.manualMedia ?? []}
-          onClose={() => setMediaExportOpen(false)}
-        />
-      )}
+
       {createMediaPending && (
         <CreateMediaDialog
           start={createMediaPending.start}

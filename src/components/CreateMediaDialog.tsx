@@ -67,26 +67,26 @@ export default function CreateMediaDialog({ start, end, duration, onConfirm, onC
         />
 
         {/* Time range */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 flex flex-col gap-1">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+          <div className="flex flex-col gap-1">
             <span className="text-[10px] text-[hsl(215,15%,45%)]">Start</span>
             <input
               value={startRaw}
               onChange={(e) => setStartRaw(e.target.value)}
-              className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[hsl(210,80%,55%)]"
+              className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[hsl(210,80%,55%)] w-full"
             />
           </div>
-          <span className="text-[hsl(215,15%,40%)] mt-5">→</span>
-          <div className="flex-1 flex flex-col gap-1">
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[10px] text-[hsl(215,15%,45%)]">{formatDuration(dur)}</span>
+            <span className="text-[hsl(215,15%,40%)] pb-2">→</span>
+          </div>
+          <div className="flex flex-col gap-1">
             <span className="text-[10px] text-[hsl(215,15%,45%)]">End</span>
             <input
               value={endRaw}
               onChange={(e) => setEndRaw(e.target.value)}
-              className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[hsl(210,80%,55%)]"
+              className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[hsl(210,80%,55%)] w-full"
             />
-          </div>
-          <div className="flex flex-col gap-1 mt-5">
-            <span className="text-xs text-[hsl(215,15%,45%)] font-mono">{formatDuration(dur)}</span>
           </div>
         </div>
 

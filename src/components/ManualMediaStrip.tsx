@@ -5,26 +5,22 @@ import { formatDuration, toFileUrl } from '../utils'
 interface Props {
   items: ManualMedia[]
   videoPath: string
-  onToggleSelect: (id: string) => void
+  onOpen: (item: ManualMedia) => void
   onDelete: (id: string) => void
 }
 
-export default function ManualMediaStrip({ items, videoPath, onToggleSelect, onDelete }: Props) {
+export default function ManualMediaStrip({ items, videoPath, onOpen, onDelete }: Props) {
   if (items.length === 0) return null
 
   return (
-    <div className="border-t border-[hsl(220,15%,18%)] bg-[hsl(222,20%,8%)] px-2 py-2">
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10px] text-[hsl(215,15%,40%)]">Manual media</span>
-        <span className="text-[10px] text-[hsl(215,15%,30%)]">· {items.length} item{items.length !== 1 ? 's' : ''}</span>
-      </div>
+    <div className="border-t border-[hsl(220,15%,18%)] px-3 py-2">
       <div className="flex gap-2 overflow-x-auto pb-1">
         {items.map((item) => (
           <MediaCard
             key={item.id}
             item={item}
             videoPath={videoPath}
-            onToggleSelect={() => onToggleSelect(item.id)}
+            onOpen={() => onOpen(item)}
             onDelete={() => onDelete(item.id)}
           />
         ))}
@@ -33,19 +29,19 @@ export default function ManualMediaStrip({ items, videoPath, onToggleSelect, onD
   )
 }
 
-function MediaCard({ item, videoPath, onToggleSelect, onDelete }: {
+function MediaCard({ item, videoPath, onOpen, onDelete }: {
   item: ManualMedia
   videoPath: string
-  onToggleSelect: () => void
+  onOpen: () => void
   onDelete: () => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [thumbReady, setThumbReady] = useState(false)
+  const isClip = item.kind === 'clip'
 
   useEffect(() => {
     const video = document.createElement('video')
     video.src = toFileUrl(videoPath)
-    video.crossOrigin = 'anonymous'
     video.muted = true
     video.preload = 'metadata'
 
@@ -58,8 +54,9 @@ function MediaCard({ item, videoPath, onToggleSelect, onDelete }: {
       if (!canvas) return
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-      canvas.width = 120
-      canvas.height = item.kind === 'clip' ? 213 : 68
+      // Aspect: clip = 9:16 preview, segment = 16:9
+      canvas.width = isClip ? 54 : 120
+      canvas.height = isClip ? 96 : 68
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       setThumbReady(true)
       video.src = ''
@@ -67,32 +64,22 @@ function MediaCard({ item, videoPath, onToggleSelect, onDelete }: {
 
     video.load()
     return () => { video.src = '' }
-  }, [videoPath, item.startSeconds, item.kind])
-
-  const isClip = item.kind === 'clip'
+  }, [videoPath, item.startSeconds, isClip])
 
   return (
     <div
-      className={`relative flex-shrink-0 rounded-lg overflow-hidden border cursor-pointer transition-colors group ${
-        item.selected
-          ? 'border-[hsl(210,80%,55%)]'
-          : 'border-[hsl(220,15%,22%)] hover:border-[hsl(220,15%,35%)]'
-      }`}
-      style={{ width: isClip ? 56 : 120, height: 68 }}
-      onClick={onToggleSelect}
+      className="relative flex-shrink-0 rounded-lg overflow-hidden border border-[hsl(220,15%,25%)] cursor-pointer group hover:border-[hsl(210,80%,55%)] transition-colors"
+      style={{ width: isClip ? 54 : 120, height: isClip ? 96 : 68 }}
+      onClick={onOpen}
+      title={`${item.title} · click to open`}
     >
-      {/* Thumbnail canvas */}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ display: thumbReady ? 'block' : 'none' }}
+        className="absolute inset-0 w-full h-full"
+        style={{ objectFit: 'cover', display: thumbReady ? 'block' : 'none' }}
       />
-      {/* Fallback bg */}
-      {!thumbReady && (
-        <div className="absolute inset-0 bg-[hsl(222,20%,14%)]" />
-      )}
+      {!thumbReady && <div className="absolute inset-0 bg-[hsl(222,20%,16%)]" />}
 
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/40 flex flex-col justify-between p-1">
         <div className="flex items-start justify-between">
           <span className={`text-[8px] px-1 py-0.5 rounded font-medium leading-none ${
@@ -109,16 +96,16 @@ function MediaCard({ item, videoPath, onToggleSelect, onDelete }: {
         </div>
         <div>
           <p className="text-[9px] text-white font-medium truncate leading-tight">{item.title}</p>
-          <p className="text-[8px] text-white/60 leading-tight">{formatDuration(item.endSeconds - item.startSeconds)}</p>
+          <p className="text-[8px] text-white/60">{formatDuration(item.endSeconds - item.startSeconds)}</p>
         </div>
       </div>
 
-      {/* Selection checkbox */}
-      {item.selected && (
-        <div className="absolute top-1 left-1 w-3 h-3 rounded-sm bg-[hsl(210,80%,55%)] flex items-center justify-center">
-          <svg width="8" height="8" viewBox="0 0 8 8" fill="white"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.2" fill="none"/></svg>
+      {/* Play hint on hover */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="3,2 8,5 3,8"/></svg>
         </div>
-      )}
+      </div>
     </div>
   )
 }
