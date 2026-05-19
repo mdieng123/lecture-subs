@@ -54,7 +54,7 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "!landing-page/**"
+      "!docs/**"
     ],
     "asarUnpack": [
       "node_modules/ffmpeg-static/**",
