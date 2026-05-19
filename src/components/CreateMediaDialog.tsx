@@ -4,38 +4,59 @@ import { formatDuration } from '../utils'
 interface Props {
   start: number
   end: number
-  onConfirm: (title: string, kind: 'clip' | 'segment') => void
+  duration: number
+  onConfirm: (title: string, kind: 'clip' | 'segment', start: number, end: number) => void
   onClose: () => void
 }
 
-export default function CreateMediaDialog({ start, end, onConfirm, onClose }: Props) {
+function parseMmss(s: string): number | null {
+  const parts = s.split(':')
+  if (parts.length === 2) {
+    const m = parseInt(parts[0]); const sec = parseFloat(parts[1])
+    if (!isNaN(m) && !isNaN(sec)) return m * 60 + sec
+  }
+  if (parts.length === 3) {
+    const h = parseInt(parts[0]); const m = parseInt(parts[1]); const sec = parseFloat(parts[2])
+    if (!isNaN(h) && !isNaN(m) && !isNaN(sec)) return h * 3600 + m * 60 + sec
+  }
+  const f = parseFloat(s)
+  return isNaN(f) ? null : f
+}
+
+function toMmss(s: number): string {
+  const m = Math.floor(s / 60)
+  const sec = (s % 60).toFixed(2).padStart(5, '0')
+  return `${m}:${sec}`
+}
+
+export default function CreateMediaDialog({ start, end, duration, onConfirm, onClose }: Props) {
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<'clip' | 'segment'>('segment')
+  const [startRaw, setStartRaw] = useState(toMmss(start))
+  const [endRaw, setEndRaw] = useState(toMmss(end))
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const startVal = parseMmss(startRaw) ?? start
+  const endVal = parseMmss(endRaw) ?? end
+  const dur = Math.max(0, endVal - startVal)
 
   function handleSubmit() {
     const t = title.trim()
-    if (!t) return
-    onConfirm(t, kind)
+    if (!t || dur < 0.5) return
+    onConfirm(t, kind, startVal, endVal)
   }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-[hsl(222,20%,12%)] border border-[hsl(220,15%,22%)] rounded-2xl shadow-2xl p-6 w-[400px] flex flex-col gap-4"
+        className="bg-[hsl(222,20%,12%)] border border-[hsl(220,15%,22%)] rounded-2xl shadow-2xl p-6 w-[420px] flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div>
-          <p className="text-sm font-semibold text-white mb-0.5">New media</p>
-          <p className="text-[11px] text-[hsl(215,15%,45%)]">
-            {formatDuration(start)} → {formatDuration(end)} &nbsp;·&nbsp; {formatDuration(end - start)} long
-          </p>
-        </div>
+        <p className="text-sm font-semibold text-white">New media</p>
 
+        {/* Title */}
         <input
           ref={inputRef}
           value={title}
@@ -45,6 +66,31 @@ export default function CreateMediaDialog({ start, end, onConfirm, onClose }: Pr
           className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-2 text-sm text-white placeholder-[hsl(215,15%,38%)] focus:outline-none focus:border-[hsl(210,80%,55%)]"
         />
 
+        {/* Time range */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex flex-col gap-1">
+            <span className="text-[10px] text-[hsl(215,15%,45%)]">Start</span>
+            <input
+              value={startRaw}
+              onChange={(e) => setStartRaw(e.target.value)}
+              className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[hsl(210,80%,55%)]"
+            />
+          </div>
+          <span className="text-[hsl(215,15%,40%)] mt-5">→</span>
+          <div className="flex-1 flex flex-col gap-1">
+            <span className="text-[10px] text-[hsl(215,15%,45%)]">End</span>
+            <input
+              value={endRaw}
+              onChange={(e) => setEndRaw(e.target.value)}
+              className="bg-[hsl(222,20%,9%)] border border-[hsl(220,15%,28%)] rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[hsl(210,80%,55%)]"
+            />
+          </div>
+          <div className="flex flex-col gap-1 mt-5">
+            <span className="text-xs text-[hsl(215,15%,45%)] font-mono">{formatDuration(dur)}</span>
+          </div>
+        </div>
+
+        {/* Type */}
         <div className="flex gap-2">
           {(['segment', 'clip'] as const).map((k) => (
             <button
@@ -58,7 +104,7 @@ export default function CreateMediaDialog({ start, end, onConfirm, onClose }: Pr
                   : 'border-[hsl(220,15%,25%)] text-[hsl(215,15%,50%)] hover:text-white'
               }`}
             >
-              {k === 'segment' ? 'YouTube Segment (16:9)' : 'Clip / Reel (9:16)'}
+              {k === 'segment' ? '⬛ YouTube (16:9)' : '▬ Reel / Clip (9:16)'}
             </button>
           ))}
         </div>
@@ -72,7 +118,7 @@ export default function CreateMediaDialog({ start, end, onConfirm, onClose }: Pr
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!title.trim()}
+            disabled={!title.trim() || dur < 0.5}
             className="px-4 py-1.5 text-xs rounded-lg bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,62%)] text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Create

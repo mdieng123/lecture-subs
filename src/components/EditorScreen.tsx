@@ -285,9 +285,10 @@ export default function EditorScreen() {
         </div>
       </div>
 
-      {/* Bottom: waveform + manual media strip */}
+      {/* Bottom panel */}
       <div className="flex-shrink-0 border-t border-[hsl(220,15%,22%)] flex flex-col">
-        <div className="h-32">
+        {/* Cue timing waveform (thin) */}
+        <div className="h-20">
           <SubtitleTimeline
             audioPath={project.audioPath}
             cues={project.cues}
@@ -296,9 +297,32 @@ export default function EditorScreen() {
             selectedCueId={selectedCueId}
             onSeek={handleSeek}
             onSelectCue={setSelectedCueId}
-            onCreateMedia={(start, end) => setCreateMediaPending({ start, end })}
           />
         </div>
+
+        {/* Clip / Segment creator bar */}
+        <div className="flex items-center gap-3 px-3 py-2 border-t border-[hsl(220,15%,18%)] bg-[hsl(222,20%,10%)]">
+          <span className="text-[11px] text-[hsl(215,15%,40%)] font-medium">Create from current time:</span>
+          <button
+            onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 60) })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 border border-purple-500/40 text-purple-300 text-xs font-medium hover:bg-purple-600/35 transition-colors"
+          >
+            <span>▬</span> New Clip (9:16)
+          </button>
+          <button
+            onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 300) })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs font-medium hover:bg-blue-600/35 transition-colors"
+          >
+            <span>⬛</span> New Segment (16:9)
+          </button>
+          {(project.manualMedia ?? []).length > 0 && (
+            <span className="ml-auto text-[10px] text-[hsl(215,15%,40%)]">
+              {(project.manualMedia ?? []).length} item{(project.manualMedia ?? []).length !== 1 ? 's' : ''} created
+            </span>
+          )}
+        </div>
+
+        {/* Created media cards */}
         <ManualMediaStrip
           items={project.manualMedia ?? []}
           videoPath={project.videoPath}
@@ -319,15 +343,16 @@ export default function EditorScreen() {
         <CreateMediaDialog
           start={createMediaPending.start}
           end={createMediaPending.end}
+          duration={project.durationSeconds}
           onClose={() => setCreateMediaPending(null)}
-          onConfirm={(title, kind) => {
-            const cues = extractCues(project.cues, createMediaPending.start, createMediaPending.end, kind)
+          onConfirm={(title, kind, start, end) => {
+            const cues = extractCues(project.cues, start, end, kind)
             const item: ManualMedia = {
               id: uuidv4(),
               title,
               kind,
-              startSeconds: createMediaPending.start,
-              endSeconds: createMediaPending.end,
+              startSeconds: start,
+              endSeconds: end,
               cues,
               selected: true,
             }

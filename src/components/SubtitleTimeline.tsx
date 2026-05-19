@@ -13,20 +13,16 @@ interface Props {
   selectedCueId: string | null
   onSeek: (t: number) => void
   onSelectCue: (id: string) => void
-  onCreateMedia?: (start: number, end: number) => void
 }
 
 export default function SubtitleTimeline({
-  audioPath, cues, currentTime, duration, selectedCueId, onSeek, onSelectCue, onCreateMedia,
+  audioPath, cues, currentTime, duration, selectedCueId, onSeek, onSelectCue,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const overlayRef = useRef<HTMLDivElement | null>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
   const regionsRef = useRef<ReturnType<typeof RegionsPlugin.create> | null>(null)
   const updateCue = useProjectStore((s) => s.updateCue)
-
-  const [addMode, setAddMode] = useState(false)
-  const [drag, setDrag] = useState<{ startX: number; currentX: number } | null>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -38,7 +34,7 @@ export default function SubtitleTimeline({
       waveColor: 'hsl(210, 20%, 35%)',
       progressColor: 'hsl(210, 80%, 55%)',
       cursorColor: 'hsl(210, 80%, 70%)',
-      height: 80,
+      height: 56,
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
@@ -48,8 +44,10 @@ export default function SubtitleTimeline({
 
     ws.load(toFileUrl(audioPath)).catch(() => {})
 
+    ws.on('ready', () => setReady(true))
+
     ws.on('interaction', (newTime: number) => {
-      onSeek(newTime)
+      if (ready) onSeek(newTime)
     })
 
     regions.on('region-clicked', (region) => {
@@ -63,12 +61,9 @@ export default function SubtitleTimeline({
       })
     })
 
-    return () => {
-      ws.destroy()
-    }
+    return () => { ws.destroy() }
   }, [audioPath])
 
-  // Sync regions when cues change
   useEffect(() => {
     const regions = regionsRef.current
     if (!regions) return
@@ -79,95 +74,29 @@ export default function SubtitleTimeline({
         id: cue.id,
         start: cue.startSeconds,
         end: cue.endSeconds,
-        color: selectedCueId === cue.id
-          ? 'rgba(59, 130, 246, 0.3)'
-          : 'rgba(100, 150, 255, 0.15)',
+        color: selectedCueId === cue.id ? 'rgba(59, 130, 246, 0.3)' : 'rgba(100, 150, 255, 0.15)',
         drag: true,
         resize: true,
       })
     }
   }, [cues, selectedCueId])
 
-  // Sync playback position
   useEffect(() => {
-    if (!wsRef.current) return
+    if (!wsRef.current || !ready) return
     const dur = wsRef.current.getDuration()
-    if (dur > 0) {
-      wsRef.current.seekTo(currentTime / dur)
-    }
-  }, [currentTime])
-
-  function xToTime(x: number, rect: DOMRect): number {
-    const ratio = Math.max(0, Math.min(1, x / rect.width))
-    return ratio * duration
-  }
-
-  function handleOverlayMouseDown(e: React.MouseEvent<HTMLDivElement>) {
-    if (!addMode) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    setDrag({ startX: x, currentX: x })
-  }
-
-  function handleOverlayMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    if (!drag) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    setDrag((d) => d ? { ...d, currentX: e.clientX - rect.left } : null)
-  }
-
-  function handleOverlayMouseUp(e: React.MouseEvent<HTMLDivElement>) {
-    if (!drag || !onCreateMedia) { setDrag(null); return }
-    const rect = e.currentTarget.getBoundingClientRect()
-    const endX = e.clientX - rect.left
-    const start = xToTime(Math.min(drag.startX, endX), rect)
-    const end = xToTime(Math.max(drag.startX, endX), rect)
-    setDrag(null)
-    if (end - start > 0.5) {
-      onCreateMedia(start, end)
-    }
-  }
-
-  const selLeft = drag ? Math.min(drag.startX, drag.currentX) : 0
-  const selWidth = drag ? Math.abs(drag.currentX - drag.startX) : 0
+    if (dur > 0) wsRef.current.seekTo(currentTime / dur)
+  }, [currentTime, ready])
 
   return (
-    <div className="h-full flex flex-col bg-[hsl(222,20%,9%)] px-2 py-1">
-      <div className="text-[10px] text-[hsl(215,15%,40%)] mb-1 flex items-center gap-2">
-        <span>Waveform</span>
-        <span className="opacity-50">· drag region edges to adjust timing</span>
-        {onCreateMedia && (
-          <button
-            onClick={() => { setAddMode((v) => !v); setDrag(null) }}
-            className={`ml-auto px-2 py-0.5 rounded text-[10px] border transition-colors ${
-              addMode
-                ? 'bg-teal-600/30 border-teal-500/60 text-teal-300'
-                : 'border-[hsl(220,15%,28%)] text-[hsl(215,15%,50%)] hover:text-white hover:border-[hsl(220,15%,40%)]'
-            }`}
-          >
-            {addMode ? '× Cancel' : '+ Add Clip / Segment'}
-          </button>
-        )}
+    <div className="h-full flex flex-col bg-[hsl(222,20%,9%)] px-2 pt-1">
+      <div className="text-[10px] text-[hsl(215,15%,35%)] mb-1 flex items-center gap-2">
+        <span>Cue timing</span>
+        {ready
+          ? <span className="opacity-50">· drag region edges to adjust</span>
+          : <span className="opacity-40">· loading audio…</span>
+        }
       </div>
-      <div className="flex-1 relative" ref={overlayRef}>
-        <div ref={containerRef} className="w-full h-full" />
-        {addMode && (
-          <div
-            className="absolute inset-0"
-            style={{ cursor: 'crosshair' }}
-            onMouseDown={handleOverlayMouseDown}
-            onMouseMove={handleOverlayMouseMove}
-            onMouseUp={handleOverlayMouseUp}
-            onMouseLeave={() => { if (drag) setDrag(null) }}
-          >
-            {drag && (
-              <div
-                className="absolute top-0 bottom-0 bg-teal-400/25 border-x border-teal-400/60 pointer-events-none"
-                style={{ left: selLeft, width: selWidth }}
-              />
-            )}
-          </div>
-        )}
-      </div>
+      <div ref={containerRef} className="flex-1" />
     </div>
   )
 }
