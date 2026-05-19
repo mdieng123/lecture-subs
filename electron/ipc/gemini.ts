@@ -450,14 +450,15 @@ Flag a cue if it has:
 1. "transcription" — garbled or phonetically wrong Arabic (Whisper speech-to-text hallucinations, non-words, clearly wrong words). Provide corrected Arabic in suggested_arabic.
 2. "translation" — the English meaning clearly does not match the Arabic text. Provide corrected English in suggested_english.
 3. "islamic_phrase" — an Islamic term, honorific, Quranic phrase, or du'a that was misheard or mistranscribed (e.g. sallallahu alayhi wa sallam, radiallahu anhu, Quranic ayahs). Provide corrected Arabic and/or English.
-4. "grammar" — correct Arabic words but with wrong grammatical form: wrong verb conjugation, incorrect gender/number agreement, wrong case ending, or a word that is grammatically inconsistent with the surrounding cues. Provide corrected Arabic in suggested_arabic.
+4. "grammar" — a word was phonetically misheard and transcribed in the wrong grammatical form (e.g. ASR heard "عملوا" when the speaker said "العمل"). Only flag grammar when the error is almost certainly a transcription slip — i.e. the correct form sounds similar enough that ASR would confuse them. Do NOT flag grammar just because the speaker used a colloquial, informal, or technically incorrect form; speakers make grammatical mistakes in speech and the transcript should faithfully reflect what was said, not correct the speaker. When in doubt, skip it.
 
 Rules:
-- ONLY flag actual errors — do not flag stylistic choices, synonyms, or missing diacritics
+- ONLY flag actual errors — do not flag stylistic choices, synonyms, missing diacritics, or spoken grammatical imprecision
 - If Arabic is empty string, skip transcription check for that cue
 - Confidence "high" = obvious error, "medium" = likely error, "low" = possible error
 - Only include suggested_arabic/suggested_english when you are confident in the correction
 - CONTEXT: Always read the cues immediately before and after the suspect cue before deciding. A word that looks wrong in isolation may be correct given the surrounding speech, and a sentence fragment that seems fine alone may reveal a transcription error when read in sequence. Use the full transcript flow to inform every correction.
+- GRAMMAR RESTRAINT: Err heavily on the side of not flagging grammar. A high grammar count is a sign of over-flagging, not thoroughness.
 ${priorBlock}
 Cues (JSON, one per line):
 ${cueLines}
