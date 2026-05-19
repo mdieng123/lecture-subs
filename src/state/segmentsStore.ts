@@ -9,6 +9,7 @@ interface SegmentsStore {
   isDirty: boolean
   savedFilePath: string | null
   returnScreen: 'editor' | 'import'
+  isManualPreview: boolean
 
   setSegments: (segments: VideoSegment[]) => void
   setDetecting: (v: boolean) => void
@@ -16,6 +17,7 @@ interface SegmentsStore {
   markSaved: (filePath: string) => void
   markDirty: () => void
   setReturnScreen: (s: 'editor' | 'import') => void
+  setIsManualPreview: (v: boolean) => void
   toggleSegment: (id: string) => void
   selectAll: () => void
   deselectAll: () => void
@@ -34,6 +36,7 @@ export const useSegmentsStore = create<SegmentsStore>((set, get) => ({
   isDirty: false,
   savedFilePath: null,
   returnScreen: 'editor',
+  isManualPreview: false,
 
   setSegments: (segments) => set({ segments, isDirty: true }),
   setDetecting: (v) => set({ detecting: v }),
@@ -41,6 +44,7 @@ export const useSegmentsStore = create<SegmentsStore>((set, get) => ({
   markSaved: (filePath) => set({ isDirty: false, savedFilePath: filePath }),
   markDirty: () => set({ isDirty: true }),
   setReturnScreen: (s) => set({ returnScreen: s }),
+  setIsManualPreview: (v) => set({ isManualPreview: v }),
 
   toggleSegment: (id) => set((s) => ({
     isDirty: true,
@@ -167,7 +171,7 @@ export const useSegmentsStore = create<SegmentsStore>((set, get) => ({
     }
   },
 
-  reset: () => set({ segments: [], detecting: false, error: null, isDirty: false, savedFilePath: null, returnScreen: 'editor' }),
+  reset: () => set({ segments: [], detecting: false, error: null, isDirty: false, savedFilePath: null, returnScreen: 'editor', isManualPreview: false }),
 }))
 
 export function buildSegmentsFromSuggestions(

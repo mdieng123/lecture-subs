@@ -31,6 +31,7 @@ interface ClipsStore {
   isDirty: boolean
   savedFilePath: string | null
   returnScreen: 'editor' | 'import'
+  isManualPreview: boolean
 
   setClips: (clips: Clip[]) => void
   setDetecting: (v: boolean) => void
@@ -38,6 +39,7 @@ interface ClipsStore {
   markSaved: (filePath: string) => void
   markDirty: () => void
   setReturnScreen: (s: 'editor' | 'import') => void
+  setIsManualPreview: (v: boolean) => void
   toggleClip: (id: string) => void
   selectAll: () => void
   deselectAll: () => void
@@ -56,6 +58,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
   isDirty: false,
   savedFilePath: null,
   returnScreen: 'editor',
+  isManualPreview: false,
 
   setClips: (clips) => set({ clips, isDirty: true }),
   setDetecting: (v) => set({ detecting: v }),
@@ -63,6 +66,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
   markSaved: (filePath) => set({ isDirty: false, savedFilePath: filePath }),
   markDirty: () => set({ isDirty: true }),
   setReturnScreen: (s) => set({ returnScreen: s }),
+  setIsManualPreview: (v) => set({ isManualPreview: v }),
 
   toggleClip: (id) => set((s) => ({
     clips: s.clips.map((c) => c.id === id ? { ...c, selected: !c.selected } : c),
@@ -203,7 +207,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
     }
   },
 
-  reset: () => set({ clips: [], detecting: false, error: null, isDirty: false, savedFilePath: null, returnScreen: 'editor' }),
+  reset: () => set({ clips: [], detecting: false, error: null, isDirty: false, savedFilePath: null, returnScreen: 'editor', isManualPreview: false }),
 }))
 
 export function buildClipsFromSuggestions(

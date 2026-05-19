@@ -12,7 +12,7 @@ const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22,
 export default function YoutubeScreen() {
   const setScreen = useProjectStore((s) => s.setScreen)
   const project = useProjectStore((s) => s.project)
-  const { segments, detecting, error, isDirty, savedFilePath, returnScreen, markSaved, toggleSegment, selectAll, deselectAll, updateSegmentCue } = useSegmentsStore()
+  const { segments, detecting, error, isDirty, savedFilePath, returnScreen, isManualPreview, markSaved, toggleSegment, selectAll, deselectAll, updateSegmentCue } = useSegmentsStore()
   const selected = segments.filter((s) => s.selected)
   const [exporting, setExporting] = useState(false)
   const [exportDone, setExportDone] = useState(false)
@@ -84,6 +84,10 @@ export default function YoutubeScreen() {
   }
 
   function handleBack() {
+    if (isManualPreview) {
+      setScreen(returnScreen)
+      return
+    }
     if (isDirty) {
       setShowBackWarning(true)
     } else {
@@ -183,28 +187,32 @@ export default function YoutubeScreen() {
         <div className="flex items-center gap-2">
           <button onClick={selectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">Select all</button>
           <button onClick={deselectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">None</button>
-          <button
-            onClick={() => handleReview()}
-            className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
-          >
-            {reviewStore.status === 'analyzing'
-              ? reviewStore.batchProgress
-                ? `Reviewing ${reviewStore.batchProgress.current}/${reviewStore.batchProgress.total}...`
-                : 'Reviewing...'
-              : 'Review'}
-            {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
-                {reviewStore.issues.filter((i) => i.status === 'pending').length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !isDirty}
-            className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] disabled:opacity-40 transition-colors"
-          >
-            {saving ? 'Saving...' : isDirty ? 'Save segments' : 'Saved'}
-          </button>
+          {!isManualPreview && (
+            <button
+              onClick={() => handleReview()}
+              className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
+            >
+              {reviewStore.status === 'analyzing'
+                ? reviewStore.batchProgress
+                  ? `Reviewing ${reviewStore.batchProgress.current}/${reviewStore.batchProgress.total}...`
+                  : 'Reviewing...'
+                : 'Review'}
+              {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
+                  {reviewStore.issues.filter((i) => i.status === 'pending').length}
+                </span>
+              )}
+            </button>
+          )}
+          {!isManualPreview && (
+            <button
+              onClick={handleSave}
+              disabled={saving || !isDirty}
+              className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] disabled:opacity-40 transition-colors"
+            >
+              {saving ? 'Saving...' : isDirty ? 'Save segments' : 'Saved'}
+            </button>
+          )}
           {exportDone ? (
             <span className="text-xs text-green-400 px-3">Exported!</span>
           ) : (

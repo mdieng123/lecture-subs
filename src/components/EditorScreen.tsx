@@ -85,11 +85,13 @@ export default function EditorScreen() {
       clipsStore.reset()
       clipsStore.setClips([{ id: item.id, title: item.title, reason: '', startSeconds: item.startSeconds, endSeconds: item.endSeconds, cues: item.cues, selected: true }])
       clipsStore.setReturnScreen('editor')
+      clipsStore.setIsManualPreview(true)
       setScreen('clips')
     } else {
       useSegmentsStore.getState().reset()
       useSegmentsStore.getState().setSegments([{ id: item.id, title: item.title, topicSummary: '', startSeconds: item.startSeconds, endSeconds: item.endSeconds, cues: item.cues, selected: true }])
       useSegmentsStore.getState().setReturnScreen('editor')
+      useSegmentsStore.getState().setIsManualPreview(true)
       setScreen('youtube')
     }
   }
@@ -293,18 +295,11 @@ export default function EditorScreen() {
       {/* Bottom panel: clip/segment creator */}
       <div className="flex-shrink-0 border-t border-[hsl(220,15%,22%)] bg-[hsl(222,20%,10%)] flex flex-col">
         <div className="flex items-center gap-3 px-3 py-2.5">
-          <span className="text-[11px] text-[hsl(215,15%,40%)] font-medium">Create from current time:</span>
           <button
-            onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 60) })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 border border-purple-500/40 text-purple-300 text-xs font-medium hover:bg-purple-600/35 transition-colors"
+            onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 120) })}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[hsl(222,20%,18%)] border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] text-xs font-medium hover:bg-[hsl(222,20%,24%)] hover:text-white transition-colors"
           >
-            ▬ New Clip (9:16)
-          </button>
-          <button
-            onClick={() => setCreateMediaPending({ start: currentTime, end: Math.min(project.durationSeconds, currentTime + 300) })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs font-medium hover:bg-blue-600/35 transition-colors"
-          >
-            ⬛ New Segment (16:9)
+            + Create Clip / Segment
           </button>
         </div>
         <ManualMediaStrip

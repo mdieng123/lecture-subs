@@ -12,7 +12,7 @@ const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22,
 export default function ClipsScreen() {
   const setScreen = useProjectStore((s) => s.setScreen)
   const project = useProjectStore((s) => s.project)
-  const { clips, detecting, error, isDirty, savedFilePath, returnScreen, markSaved, toggleClip, selectAll, deselectAll, updateClipCue } = useClipsStore()
+  const { clips, detecting, error, isDirty, savedFilePath, returnScreen, isManualPreview, markSaved, toggleClip, selectAll, deselectAll, updateClipCue } = useClipsStore()
   const selected = clips.filter((c) => c.selected)
   const [exporting, setExporting] = useState(false)
   const [exportDone, setExportDone] = useState(false)
@@ -84,6 +84,10 @@ export default function ClipsScreen() {
   }
 
   function handleBack() {
+    if (isManualPreview) {
+      setScreen(returnScreen)
+      return
+    }
     if (isDirty) {
       setShowBackWarning(true)
     } else {
@@ -175,28 +179,32 @@ export default function ClipsScreen() {
         <div className="flex items-center gap-2">
           <button onClick={selectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">Select all</button>
           <button onClick={deselectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">None</button>
-          <button
-            onClick={() => handleReview()}
-            className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
-          >
-            {reviewStore.status === 'analyzing'
-              ? reviewStore.batchProgress
-                ? `Reviewing ${reviewStore.batchProgress.current}/${reviewStore.batchProgress.total}...`
-                : 'Reviewing...'
-              : 'Review'}
-            {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
-                {reviewStore.issues.filter((i) => i.status === 'pending').length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !isDirty}
-            className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] disabled:opacity-40 transition-colors"
-          >
-            {saving ? 'Saving...' : isDirty ? 'Save clips' : 'Saved'}
-          </button>
+          {!isManualPreview && (
+            <button
+              onClick={() => handleReview()}
+              className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
+            >
+              {reviewStore.status === 'analyzing'
+                ? reviewStore.batchProgress
+                  ? `Reviewing ${reviewStore.batchProgress.current}/${reviewStore.batchProgress.total}...`
+                  : 'Reviewing...'
+                : 'Review'}
+              {reviewStore.status === 'done' && reviewStore.issues.filter((i) => i.status === 'pending').length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">
+                  {reviewStore.issues.filter((i) => i.status === 'pending').length}
+                </span>
+              )}
+            </button>
+          )}
+          {!isManualPreview && (
+            <button
+              onClick={handleSave}
+              disabled={saving || !isDirty}
+              className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] disabled:opacity-40 transition-colors"
+            >
+              {saving ? 'Saving...' : isDirty ? 'Save clips' : 'Saved'}
+            </button>
+          )}
           {exportDone ? (
             <span className="text-xs text-green-400 px-3">Exported!</span>
           ) : (
@@ -344,7 +352,7 @@ function ClipCard({ clip }: { clip: Clip }) {
   return (
     <div className={`flex flex-col rounded-lg border transition-colors ${clip.selected ? 'border-[hsl(210,60%,45%)] bg-[hsl(222,20%,14%)]' : 'border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)]'}`}>
       {/* 9:16 video preview */}
-      <div className="relative cursor-pointer" style={{ aspectRatio: '9/16', overflow: 'hidden', borderRadius: '0.5rem 0.5rem 0 0' }} onClick={togglePlay}>
+      <div className="relative cursor-pointer" style={{ aspectRatio: '9/16', maxHeight: '52vh', overflow: 'hidden', borderRadius: '0.5rem 0.5rem 0 0' }} onClick={togglePlay}>
         <video
           ref={videoRef}
           src={videoSrc}
