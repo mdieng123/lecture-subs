@@ -58,7 +58,17 @@ async function getGroqApiKey(): Promise<string | null> {
   return null
 }
 
-const SALAFI_TRANSLATION_RULES = `TRANSLATION RULES (Salafi scholarly standard — do not deviate):
+type TargetLanguage = 'english' | 'spanish' | 'french' | 'indonesian' | 'bengali' | 'urdu'
+
+const SHARED_RULES = `- Translate literally and precisely — do NOT paraphrase, summarize, or interpret. Preserve the exact meaning the speaker intended.
+- Do not soften, modernize, or reword Islamic concepts.
+- Keep "Allah" — never translate to a local word for "God".
+- Preserve honorifics as spoken: صلى الله عليه وسلم → "ﷺ" or the target-language equivalent phrase, رضي الله عنه → equivalent phrase in target language, رحمه الله → equivalent phrase.
+- If a word has no clean equivalent, keep it in Arabic transliteration — do not invent a substitute.
+- Only use ellipsis (...) when a sentence is genuinely cut off mid-phrase at a hard break. When in doubt, omit it.`
+
+const LANGUAGE_RULES: Record<TargetLanguage, string> = {
+  english: `TRANSLATION RULES (Salafi scholarly standard — English):
 - Use "Allah" — never "God"
 - Preserve honorifics exactly as spoken: صلى الله عليه وسلم → "ﷺ" or "peace be upon him", رضي الله عنه → "may Allah be pleased with him", رحمه الله → "may Allah have mercy on him"
 - Hadith chain terms: حدثنا → "narrated to us", أخبرنا → "informed us", عن → "from", قال → "he said" / "she said"
@@ -66,7 +76,54 @@ const SALAFI_TRANSLATION_RULES = `TRANSLATION RULES (Salafi scholarly standard �
 - Do not soften, modernize, or reword Islamic concepts. Keep fiqh and aqeedah terminology (e.g. salah not "prayer service", wudu not "washing", sunnah not "tradition").
 - Proper nouns: transliterate names as they are commonly known in English Islamic scholarship (e.g. 'A'ishah, Ibn 'Umar, Abu Hurayrah).
 - If a word has no clean English equivalent, transliterate it and do not invent a substitute.
-- Only use ellipsis (...) when a sentence is genuinely cut off mid-phrase at a hard break (e.g. the cue ends mid-clause with no natural pause). Do NOT add ... just because the speech continues — most cues end at a natural pause or clause boundary and need no ellipsis. Avoid leading ... unless the cue truly resumes mid-sentence with no context. When in doubt, omit the ellipsis.`
+- Only use ellipsis (...) when a sentence is genuinely cut off mid-phrase at a hard break (e.g. the cue ends mid-clause with no natural pause). Do NOT add ... just because the speech continues — most cues end at a natural pause or clause boundary and need no ellipsis. Avoid leading ... unless the cue truly resumes mid-sentence with no context. When in doubt, omit the ellipsis.`,
+
+  spanish: `TRANSLATION RULES (Salafi scholarly standard — Spanish):
+${SHARED_RULES}
+- Use "Allah" — never "Dios" or "Alá"
+- Honorifics: صلى الله عليه وسلم → "que la paz y las bendiciones de Allah sean con él" or keep "ﷺ", رضي الله عنه → "que Allah esté complacido con él", رحمه الله → "que Allah tenga misericordia de él"
+- Hadith chain terms: حدثنا → "nos narró", أخبرنا → "nos informó", عن → "de", قال → "dijo"
+- Keep Islamic terms in Arabic transliteration when Spanish has no equivalent: salah, wudu, zakah, taqwa, iman, kufr, shirk, sunnah, hadith, fiqh — do not translate these.
+- Names: use established Spanish-Islamic scholarship transliterations ('A'ishah, Ibn 'Umar, Abu Hurayrah).
+- Write in natural, fluent Spanish — not word-for-word literal to the point of sounding unnatural.`,
+
+  french: `TRANSLATION RULES (Salafi scholarly standard — French):
+${SHARED_RULES}
+- Use "Allah" — never "Dieu" or "Allâh" with diacritics unless standard
+- Honorifics: صلى الله عليه وسلم → "que la paix et les bénédictions d'Allah soient sur lui" or keep "ﷺ", رضي الله عنه → "qu'Allah soit satisfait de lui", رحمه الله → "qu'Allah lui fasse miséricorde"
+- Hadith chain terms: حدثنا → "il nous a rapporté", أخبرنا → "il nous a informés", عن → "de la part de", قال → "il dit"
+- Keep Islamic terms in Arabic transliteration when French has no equivalent: salah, wudu, zakah, taqwa, iman, kufr, shirk, sunnah, hadith, fiqh — do not translate these.
+- Names: use established French-Islamic scholarship transliterations.
+- Write in natural, fluent French — avoid overly literal constructions that read as machine translation.`,
+
+  indonesian: `TRANSLATION RULES (Salafi scholarly standard — Indonesian/Malay):
+${SHARED_RULES}
+- Use "Allah" — this is already the standard term in Indonesian Islam, do not change it
+- Honorifics: صلى الله عليه وسلم → "shallallahu 'alaihi wa sallam" or "ﷺ", رضي الله عنه → "radhiyallahu 'anhu", رحمه الله → "rahimahullah"
+- Hadith chain terms: حدثنا → "telah menceritakan kepada kami", أخبرنا → "telah mengabarkan kepada kami", عن → "dari", قال → "beliau berkata"
+- Indonesian has absorbed extensive Arabic Islamic vocabulary — prefer the established Indonesian-Islamic form (shalat, wudhu, zakat, taqwa, iman, sunnah, hadits, fiqih) over the raw Arabic or English.
+- Names: use Indonesian-Islamic standard transliterations (Aisyah, Ibnu Umar, Abu Hurairah).
+- Write in natural Bahasa Indonesia — formal register appropriate for Islamic lecture content.`,
+
+  bengali: `TRANSLATION RULES (Salafi scholarly standard — Bengali):
+${SHARED_RULES}
+- Use "আল্লাহ" (Allah) — never "ঈশ্বর" or "ভগবান"
+- Honorifics: صلى الله عليه وسلم → "সাল্লাল্লাহু আলাইহি ওয়াসাল্লাম" or "ﷺ", رضي الله عنه → "রাদিয়াল্লাহু আনহু", رحمه الله → "রাহিমাহুল্লাহ"
+- Hadith chain terms: حدثنا → "আমাদের কাছে বর্ণনা করেছেন", أخبرنا → "আমাদের সংবাদ দিয়েছেন", عن → "থেকে", قال → "তিনি বলেছেন"
+- Keep Islamic terms in established Bengali-Islamic usage: সালাহ/নামাজ (prefer সালাহ), যাকাত, তাকওয়া, ঈমান, সুন্নাহ, হাদীস, ফিকহ.
+- Names: use Bengali-Islamic standard transliterations.
+- Write in fluent, natural Bengali — formal but accessible register. Avoid overly Sanskritized vocabulary; prefer Arabic-origin Bengali Islamic vocabulary.`,
+
+  urdu: `TRANSLATION RULES (Salafi scholarly standard — Urdu):
+${SHARED_RULES}
+- Use "اللہ" (Allah) — never "خدا" (khuda) or Hindu-origin equivalents
+- Honorifics: صلى الله عليه وسلم → "صلی اللہ علیہ وسلم" or "ﷺ", رضي الله عنه → "رضی اللہ عنہ", رحمه الله → "رحمہ اللہ"
+- Hadith chain terms: حدثنا → "ہم سے بیان کیا", أخبرنا → "ہمیں خبر دی", عن → "سے", قال → "انہوں نے فرمایا"
+- Keep Islamic terms in established Urdu-Islamic usage: نماز (salah), وضو (wudu), زکوٰۃ, تقویٰ, ایمان, سنّت, حدیث, فقہ — use the Urdu forms Muslims actually use.
+- CRITICAL: Avoid Hindi-origin vocabulary (e.g. use اللہ not ایشور, use نماز not پوجا). Urdu Islamic register draws from Arabic/Persian, not Sanskrit.
+- Names: use standard Urdu-Islamic transliterations (عائشہ، ابن عمر، ابو ہریرہ).
+- Write in formal Urdu script (Nastaliq style mentally) — the register of Islamic scholarly discourse, not colloquial Urdu.`,
+}
 
 
 interface Segment {
@@ -229,6 +286,7 @@ async function geminiTranslateChunk(
   chunkIndex: number,
   totalChunks: number,
   model: string,
+  targetLanguage: TargetLanguage = 'english',
 ): Promise<Segment[]> {
   if (rawCues.length === 0) return []
   const win = getMainWindow()
@@ -241,11 +299,11 @@ async function geminiTranslateChunk(
     model,
     contents: [{
       role: 'user',
-      parts: [{ text: `You are translating Arabic Islamic lecture cues (likely a Salafi/Athari scholar on hadith or aqeedah) into English subtitles.
+      parts: [{ text: `You are translating Arabic Islamic lecture cues (likely a Salafi/Athari scholar on hadith or aqeedah) into ${targetLanguage === 'english' ? 'English' : targetLanguage === 'spanish' ? 'Spanish' : targetLanguage === 'french' ? 'French' : targetLanguage === 'indonesian' ? 'Indonesian/Malay' : targetLanguage === 'bengali' ? 'Bengali' : 'Urdu'} subtitles.
 
-${SALAFI_TRANSLATION_RULES}
+${LANGUAGE_RULES[targetLanguage]}
 
-Each translation must fit on 1–3 subtitle lines (max ~45 chars per line). Translate the full content completely — do not summarize or omit anything. Be precise, Be concise but never sacrifice precision.
+Each translation must fit on 1–3 subtitle lines (max ~45 chars per line). Translate the full content completely — do not summarize or omit anything. Be precise, be concise but never sacrifice precision.
 
 Translate each numbered Arabic cue. Return a JSON array of strings — EXACTLY ${rawCues.length} strings, same count and order as the input. Do not skip, merge, or reorder entries.
 
@@ -501,13 +559,13 @@ ipcMain.handle(
 
 ipcMain.handle(
   'gemini:translateChunk',
-  async (_event, arabicCues: RawCue[], chunkIndex: number, totalChunks: number) => {
+  async (_event, arabicCues: RawCue[], chunkIndex: number, totalChunks: number, targetLanguage?: TargetLanguage) => {
     try {
       const apiKey = await getApiKey()
       if (!apiKey) return { error: 'No Gemini API key configured' }
       const store = new Store()
       const model = (store.get('model') as string) ?? 'gemini-2.5-pro'
-      const segments = await geminiTranslateChunk(apiKey, arabicCues, chunkIndex, totalChunks, model)
+      const segments = await geminiTranslateChunk(apiKey, arabicCues, chunkIndex, totalChunks, model, targetLanguage ?? 'english')
       return { segments }
     } catch (err) {
       return { error: scrubError(err).message }

@@ -60,6 +60,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     chunkMinutes: 15,
     maxConcurrentChunks: 3,
     showCostEstimate: true,
+    targetLanguage: 'english',
   },
   subtitleStyle: {
     fontSize: 'medium',

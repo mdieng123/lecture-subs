@@ -201,7 +201,7 @@ export default function ProcessingScreen() {
 
       async function translateChunk(i: number) {
         if (cancelled) return
-        const result = await window.api.gemini.translateChunk(allArabicCues[i] ?? [], i, chunks.length)
+        const result = await window.api.gemini.translateChunk(allArabicCues[i] ?? [], i, chunks.length, settings.targetLanguage)
         if (result.error) throw new Error(`Chunk ${i + 1} translation: ${result.error}`)
         allSegments[i] = result.segments
         // Write recovery after each translation batch

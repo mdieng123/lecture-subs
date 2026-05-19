@@ -21,11 +21,14 @@ export interface Project {
   manualMedia?: ManualMedia[];
 }
 
+export type TargetLanguage = 'english' | 'spanish' | 'french' | 'indonesian' | 'bengali' | 'urdu'
+
 export interface Settings {
   model: 'gemini-2.5-pro' | 'gemini-2.5-flash';
   chunkMinutes: number;
   maxConcurrentChunks: number;
   showCostEstimate: boolean;
+  targetLanguage: TargetLanguage;
 }
 
 export type AppScreen = 'import' | 'processing' | 'editor' | 'clips' | 'youtube';

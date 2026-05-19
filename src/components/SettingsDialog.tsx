@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useProjectStore } from '../state/projectStore'
-import type { Settings } from '../types'
+import type { Settings, TargetLanguage } from '../types'
 import { toFileUrl } from '../utils'
 
 const INTRO_MAX_SECONDS = 20
@@ -159,6 +159,34 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             >
               Get a Groq API key →
             </button>
+          </div>
+
+          {/* Target language */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-[hsl(210,20%,80%)]">Translation Language</label>
+            <p className="text-[10px] text-[hsl(215,15%,42%)] mb-2">Language subtitles are translated into during processing.</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([
+                ['english', '🇬🇧 English'],
+                ['spanish', '🇪🇸 Spanish'],
+                ['french', '🇫🇷 French'],
+                ['indonesian', '🇮🇩 Indonesian / Malay'],
+                ['bengali', '🇧🇩 Bengali'],
+                ['urdu', '🇵🇰 Urdu'],
+              ] as [TargetLanguage, string][]).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => handleSettingChange({ targetLanguage: val })}
+                  className={`px-3 py-2 text-xs rounded-lg border text-left transition-colors ${
+                    settings.targetLanguage === val
+                      ? 'border-[hsl(210,60%,50%)] bg-[hsl(210,30%,18%)] text-[hsl(210,80%,75%)]'
+                      : 'border-[hsl(220,15%,25%)] text-[hsl(215,15%,55%)] hover:text-white hover:border-[hsl(220,15%,38%)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Model */}
