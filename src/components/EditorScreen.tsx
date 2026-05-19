@@ -1,16 +1,56 @@
 import { useState, useRef, useCallback } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import { useProjectStore } from '../state/projectStore'
 import { useSegmentsStore, buildSegmentsFromSuggestions } from '../state/segmentsStore'
 import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import { runScrutinize } from '../utils'
-import type { SegmentDurationRange } from '../types'
+import type { SegmentDurationRange, ReviewIssue, Cue, ManualMedia } from '../types'
 import VideoPreview from './VideoPreview'
 import CueList from './CueList'
 import SubtitleTimeline from './SubtitleTimeline'
 import ExportDialog from './ExportDialog'
 import SettingsDialog from './SettingsDialog'
 import ReviewPanel from './ReviewPanel'
+import CreateMediaDialog from './CreateMediaDialog'
+import ManualMediaStrip from './ManualMediaStrip'
+import ManualMediaExportDialog from './ManualMediaExportDialog'
+
+const MAX_CUE_DURATION = 7
+
+function splitLongCue(cue: Cue): Cue[] {
+  const dur = cue.endSeconds - cue.startSeconds
+  if (dur <= MAX_CUE_DURATION) return [cue]
+  const numChunks = Math.ceil(dur / MAX_CUE_DURATION)
+  const chunkDur = dur / numChunks
+  const words = cue.english.trim().split(/\s+/)
+  return Array.from({ length: numChunks }, (_, i) => {
+    const wStart = Math.floor(i * words.length / numChunks)
+    const wEnd = Math.floor((i + 1) * words.length / numChunks)
+    return {
+      ...cue,
+      id: uuidv4(),
+      startSeconds: +(cue.startSeconds + i * chunkDur).toFixed(3),
+      endSeconds: +(cue.startSeconds + (i + 1) * chunkDur).toFixed(3),
+      english: words.slice(wStart, wEnd).join(' '),
+      arabic: i === 0 ? cue.arabic : '',
+    }
+  })
+}
+
+function extractCues(allCues: Cue[], start: number, end: number, kind: 'clip' | 'segment'): Cue[] {
+  const dur = end - start
+  const relevant = allCues
+    .filter((c) => c.endSeconds > start + 0.1 && c.startSeconds < end - 0.1)
+    .map((c) => ({
+      ...c,
+      id: uuidv4(),
+      startSeconds: +Math.max(0, c.startSeconds - start).toFixed(3),
+      endSeconds: +Math.min(dur, c.endSeconds - start).toFixed(3),
+    }))
+    .filter((c) => c.endSeconds - c.startSeconds >= 0.5)
+  return kind === 'clip' ? relevant.flatMap(splitLongCue) : relevant
+}
 
 export default function EditorScreen() {
   const project = useProjectStore((s) => s.project)
@@ -27,8 +67,13 @@ export default function EditorScreen() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [segmentModalOpen, setSegmentModalOpen] = useState(false)
   const [durationRange, setDurationRange] = useState<SegmentDurationRange>('7-10')
+  const [createMediaPending, setCreateMediaPending] = useState<{ start: number; end: number } | null>(null)
+  const [mediaExportOpen, setMediaExportOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const reviewStore = useReviewStore()
+  const addManualMedia = useProjectStore((s) => s.addManualMedia)
+  const deleteManualMedia = useProjectStore((s) => s.deleteManualMedia)
+  const toggleManualMediaSelected = useProjectStore((s) => s.toggleManualMediaSelected)
 
   const handleSeek = useCallback((time: number) => {
     if (videoRef.current) {
@@ -59,7 +104,7 @@ export default function EditorScreen() {
     }
   }, [undo, redo])
 
-  async function handleReview() {
+  async function handleReview(priorIssues?: ReviewIssue[]) {
     if (!project) return
     const currentStatus = useReviewStore.getState().status
     if (currentStatus === 'done' || currentStatus === 'analyzing') { reviewStore.setOpen(true); return }
@@ -69,7 +114,8 @@ export default function EditorScreen() {
     try {
       const issues = await runScrutinize(
         project.cues.map((c) => ({ id: c.id, arabic: c.arabic ?? '', english: c.english })),
-        (cur, total) => { if (useReviewStore.getState().sessionId === sid) reviewStore.setBatchProgress(cur, total) }
+        (cur, total) => { if (useReviewStore.getState().sessionId === sid) reviewStore.setBatchProgress(cur, total) },
+        priorIssues
       )
       if (useReviewStore.getState().sessionId !== sid) return
       reviewStore.setIssues(issues)
@@ -153,7 +199,7 @@ export default function EditorScreen() {
             Redo
           </button>
           <button
-            onClick={handleReview}
+            onClick={() => handleReview()}
             className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
             title="AI review of transcript for errors"
           >
@@ -181,6 +227,14 @@ export default function EditorScreen() {
               <span className="text-[11px] text-amber-400/80" title="Run a review before exporting to catch transcription or translation issues">
                 ⚠ Not reviewed
               </span>
+            )}
+            {(project.manualMedia ?? []).length > 0 && (
+              <button
+                onClick={() => setMediaExportOpen(true)}
+                className="px-3 py-1.5 text-sm rounded border border-teal-600/50 text-teal-300 hover:bg-teal-600/20 transition-colors"
+              >
+                Export Media ({(project.manualMedia ?? []).filter((m) => m.selected).length}/{(project.manualMedia ?? []).length})
+              </button>
             )}
             <button
               onClick={() => setExportOpen(true)}
@@ -231,27 +285,63 @@ export default function EditorScreen() {
         </div>
       </div>
 
-      {/* Bottom: waveform */}
-      <div className="flex-shrink-0 h-32 border-t border-[hsl(220,15%,22%)]">
-        <SubtitleTimeline
-          audioPath={project.audioPath}
-          cues={project.cues}
-          currentTime={currentTime}
-          duration={project.durationSeconds}
-          selectedCueId={selectedCueId}
-          onSeek={handleSeek}
-          onSelectCue={setSelectedCueId}
+      {/* Bottom: waveform + manual media strip */}
+      <div className="flex-shrink-0 border-t border-[hsl(220,15%,22%)] flex flex-col">
+        <div className="h-32">
+          <SubtitleTimeline
+            audioPath={project.audioPath}
+            cues={project.cues}
+            currentTime={currentTime}
+            duration={project.durationSeconds}
+            selectedCueId={selectedCueId}
+            onSeek={handleSeek}
+            onSelectCue={setSelectedCueId}
+            onCreateMedia={(start, end) => setCreateMediaPending({ start, end })}
+          />
+        </div>
+        <ManualMediaStrip
+          items={project.manualMedia ?? []}
+          videoPath={project.videoPath}
+          onToggleSelect={toggleManualMediaSelected}
+          onDelete={deleteManualMedia}
         />
       </div>
 
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {mediaExportOpen && (
+        <ManualMediaExportDialog
+          items={project.manualMedia ?? []}
+          onClose={() => setMediaExportOpen(false)}
+        />
+      )}
+      {createMediaPending && (
+        <CreateMediaDialog
+          start={createMediaPending.start}
+          end={createMediaPending.end}
+          onClose={() => setCreateMediaPending(null)}
+          onConfirm={(title, kind) => {
+            const cues = extractCues(project.cues, createMediaPending.start, createMediaPending.end, kind)
+            const item: ManualMedia = {
+              id: uuidv4(),
+              title,
+              kind,
+              startSeconds: createMediaPending.start,
+              endSeconds: createMediaPending.end,
+              cues,
+              selected: true,
+            }
+            addManualMedia(item)
+            setCreateMediaPending(null)
+          }}
+        />
+      )}
       {reviewStore.open && (
         <ReviewPanel
           videoPath={project.videoPath}
           getAbsoluteTime={(cueId) => project.cues.find((c) => c.id === cueId)?.startSeconds}
           onClose={() => reviewStore.setOpen(false)}
-          onRerun={() => { reviewStore.reset(); handleReview() }}
+          onRerun={() => { const prior = useReviewStore.getState().issues; reviewStore.reset(); handleReview(prior) }}
           getCue={(id) => project.cues.find((c) => c.id === id)}
           onApplyFix={(cueId, patch) => updateCue(cueId, patch)}
         />

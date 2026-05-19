@@ -418,7 +418,7 @@ const SCRUTINIZE_SCHEMA = {
   required: ['issues'],
 }
 
-ipcMain.handle('gemini:scrutinize', async (_event, cues: { id: string; arabic: string; english: string }[]) => {
+ipcMain.handle('gemini:scrutinize', async (_event, cues: { id: string; arabic: string; english: string }[], priorContext?: { dismissed: { cueId: string; type: string; problem: string }[]; approved: { cueId: string; type: string }[] }) => {
   const apiKey = await getApiKey()
   if (!apiKey) return { error: 'No API key configured' }
 
@@ -429,6 +429,20 @@ ipcMain.handle('gemini:scrutinize', async (_event, cues: { id: string; arabic: s
   const cueLines = cues
     .map((c) => `{"id":"${c.id}","arabic":${JSON.stringify(c.arabic)},"english":${JSON.stringify(c.english)}}`)
     .join('\n')
+
+  let priorBlock = ''
+  if (priorContext?.dismissed?.length || priorContext?.approved?.length) {
+    const lines: string[] = []
+    if (priorContext.approved?.length) {
+      lines.push('Previously reviewed and approved corrections (already fixed — do not re-flag):')
+      priorContext.approved.forEach((i) => lines.push(`  - Cue ${i.cueId}, ${i.type}: already corrected by reviewer`))
+    }
+    if (priorContext.dismissed?.length) {
+      lines.push('Previously reviewed and dismissed issues (reviewer decided these are NOT errors — do not re-flag unless the error is significantly different):')
+      priorContext.dismissed.forEach((i) => lines.push(`  - Cue ${i.cueId}, ${i.type}: "${i.problem}" — dismissed by reviewer`))
+    }
+    priorBlock = `\nPrior review context:\n${lines.join('\n')}\n`
+  }
 
   const prompt = `You are an expert Arabic Islamic lecture reviewer. Examine these subtitle cues from a lecture and flag genuine errors only.
 
@@ -444,7 +458,7 @@ Rules:
 - Confidence "high" = obvious error, "medium" = likely error, "low" = possible error
 - Only include suggested_arabic/suggested_english when you are confident in the correction
 - CONTEXT: Always read the cues immediately before and after the suspect cue before deciding. A word that looks wrong in isolation may be correct given the surrounding speech, and a sentence fragment that seems fine alone may reveal a transcription error when read in sequence. Use the full transcript flow to inform every correction.
-
+${priorBlock}
 Cues (JSON, one per line):
 ${cueLines}
 

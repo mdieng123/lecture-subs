@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import type { Cue, Project, Settings, SubtitleStyle, LogoSettings, AppScreen, ProcessingProgress } from '../types'
+import type { Cue, Project, Settings, SubtitleStyle, LogoSettings, AppScreen, ProcessingProgress, ManualMedia } from '../types'
 
 const MAX_HISTORY = 50
 
@@ -37,6 +37,11 @@ interface ProjectStore {
   mergeWithNext: (id: string) => void
   deleteCue: (id: string) => void
   setCues: (cues: Cue[]) => void
+
+  // Manual media
+  addManualMedia: (item: ManualMedia) => void
+  deleteManualMedia: (id: string) => void
+  toggleManualMediaSelected: (id: string) => void
 
   undo: () => void
   redo: () => void
@@ -154,6 +159,31 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const { project } = get()
     if (!project) return
     set({ project: pushHistory(project, cues) })
+  },
+
+  addManualMedia: (item) => {
+    const { project } = get()
+    if (!project) return
+    set({ project: { ...project, manualMedia: [...(project.manualMedia ?? []), item] } })
+  },
+
+  deleteManualMedia: (id) => {
+    const { project } = get()
+    if (!project) return
+    set({ project: { ...project, manualMedia: (project.manualMedia ?? []).filter((m) => m.id !== id) } })
+  },
+
+  toggleManualMediaSelected: (id) => {
+    const { project } = get()
+    if (!project) return
+    set({
+      project: {
+        ...project,
+        manualMedia: (project.manualMedia ?? []).map((m) =>
+          m.id === id ? { ...m, selected: !m.selected } : m
+        ),
+      },
+    })
   },
 
   undo: () => {

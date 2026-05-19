@@ -97,7 +97,7 @@ const api = {
     cancelProcessing: () => ipcRenderer.invoke('gemini:cancelProcessing'),
     detectClips: (transcript: string) => ipcRenderer.invoke('gemini:detectClips', transcript),
     detectSegments: (transcript: string, durationRange: string) => ipcRenderer.invoke('gemini:detectSegments', transcript, durationRange),
-    scrutinize: (cues: { id: string; arabic: string; english: string }[]) => ipcRenderer.invoke('gemini:scrutinize', cues),
+    scrutinize: (cues: { id: string; arabic: string; english: string }[], priorContext?: { dismissed: { cueId: string; type: string; problem: string }[]; approved: { cueId: string; type: string }[] }) => ipcRenderer.invoke('gemini:scrutinize', cues, priorContext),
     onChunkProgress: (callback: (data: unknown) => void) => {
       const handler = (_: Electron.IpcRendererEvent, data: unknown) => callback(data)
       ipcRenderer.on('gemini:chunkProgress', handler)

@@ -4,18 +4,29 @@ const SCRUTINIZE_BATCH = 100
 
 export async function runScrutinize(
   cues: { id: string; arabic: string; english: string }[],
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  priorIssues?: ReviewIssue[]
 ): Promise<ReviewIssue[]> {
   const idMap = cues.map((c) => c.id)
   const totalBatches = Math.ceil(cues.length / SCRUTINIZE_BATCH)
   const allIssues: ReviewIssue[] = []
+
+  // Build prior context from dismissed/approved issues for Gemini
+  const priorContext = priorIssues?.length ? {
+    dismissed: priorIssues
+      .filter(i => i.status === 'dismissed')
+      .map(i => ({ cueId: i.cueId, type: i.type, problem: i.problem })),
+    approved: priorIssues
+      .filter(i => i.status === 'approved')
+      .map(i => ({ cueId: i.cueId, type: i.type })),
+  } : undefined
 
   for (let b = 0; b < totalBatches; b++) {
     const offset = b * SCRUTINIZE_BATCH
     const batch = cues.slice(offset, offset + SCRUTINIZE_BATCH)
     // Use global numeric indices so cue_id maps back correctly across batches
     const payload = batch.map((c, j) => ({ id: String(offset + j), arabic: c.arabic, english: c.english }))
-    const result = await window.api.gemini.scrutinize(payload)
+    const result = await window.api.gemini.scrutinize(payload, priorContext)
     if (result.error) throw new Error(result.error)
     for (const raw of result.issues ?? []) {
       allIssues.push({

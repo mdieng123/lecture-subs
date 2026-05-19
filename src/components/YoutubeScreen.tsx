@@ -5,7 +5,7 @@ import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import ReviewPanel from './ReviewPanel'
 import { serializeSrt, formatDuration, runScrutinize, toFileUrl } from '../utils'
-import type { VideoSegment, Cue } from '../types'
+import type { VideoSegment, Cue, ReviewIssue } from '../types'
 
 const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22, xl: 30, xxl: 40 }
 
@@ -21,7 +21,7 @@ export default function YoutubeScreen() {
   const [showBackWarning, setShowBackWarning] = useState(false)
   const reviewStore = useReviewStore()
 
-  async function handleReview() {
+  async function handleReview(priorIssues?: ReviewIssue[]) {
     const currentStatus = useReviewStore.getState().status
     if (currentStatus === 'done' || currentStatus === 'analyzing') { reviewStore.setOpen(true); return }
     const sid = reviewStore.startSession()
@@ -30,7 +30,8 @@ export default function YoutubeScreen() {
     try {
       const issues = await runScrutinize(
         segments.flatMap((seg) => seg.cues.map((c) => ({ id: c.id, arabic: c.arabic ?? '', english: c.english }))),
-        (cur, total) => { if (useReviewStore.getState().sessionId === sid) reviewStore.setBatchProgress(cur, total) }
+        (cur, total) => { if (useReviewStore.getState().sessionId === sid) reviewStore.setBatchProgress(cur, total) },
+        priorIssues
       )
       if (useReviewStore.getState().sessionId !== sid) return
       reviewStore.setIssues(issues)
@@ -183,7 +184,7 @@ export default function YoutubeScreen() {
           <button onClick={selectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">Select all</button>
           <button onClick={deselectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">None</button>
           <button
-            onClick={handleReview}
+            onClick={() => handleReview()}
             className="relative px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
           >
             {reviewStore.status === 'analyzing'
@@ -283,7 +284,7 @@ export default function YoutubeScreen() {
             }
           }}
           onClose={() => reviewStore.setOpen(false)}
-          onRerun={() => { reviewStore.reset(); handleReview() }}
+          onRerun={() => { const prior = useReviewStore.getState().issues; reviewStore.reset(); handleReview(prior) }}
           getCue={getCue}
           onApplyFix={applyFix}
           getContext={(cueId) => {

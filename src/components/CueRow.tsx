@@ -144,6 +144,29 @@ export default function CueRow({ cue, isSelected, isActive, index, onSelect, vid
   )
 }
 
+function toMmss(s: number): string {
+  const m = Math.floor(s / 60)
+  const sec = (s % 60).toFixed(2).padStart(5, '0')
+  return `${m}:${sec}`
+}
+
+function parseMmss(raw: string): number | null {
+  const parts = raw.split(':')
+  if (parts.length === 2) {
+    const m = parseInt(parts[0])
+    const s = parseFloat(parts[1])
+    if (!isNaN(m) && !isNaN(s)) return m * 60 + s
+  }
+  if (parts.length === 3) {
+    const h = parseInt(parts[0])
+    const m = parseInt(parts[1])
+    const s = parseFloat(parts[2])
+    if (!isNaN(h) && !isNaN(m) && !isNaN(s)) return h * 3600 + m * 60 + s
+  }
+  const fallback = parseFloat(raw)
+  return isNaN(fallback) ? null : fallback
+}
+
 function TimestampInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [editing, setEditing] = useState(false)
   const [raw, setRaw] = useState('')
@@ -153,11 +176,11 @@ function TimestampInput({ value, onChange }: { value: number; onChange: (v: numb
       <input
         autoFocus
         value={raw}
-        className="w-16 text-[10px] bg-[hsl(222,20%,10%)] border border-[hsl(210,80%,55%)] rounded px-1 text-center text-white"
+        className="w-20 text-[10px] bg-[hsl(222,20%,10%)] border border-[hsl(210,80%,55%)] rounded px-1 text-center text-white font-mono"
         onChange={(e) => setRaw(e.target.value)}
         onBlur={() => {
-          const parsed = parseFloat(raw)
-          if (!isNaN(parsed)) onChange(parsed)
+          const parsed = parseMmss(raw)
+          if (parsed !== null) onChange(parsed)
           setEditing(false)
         }}
         onKeyDown={(e) => {
@@ -172,7 +195,7 @@ function TimestampInput({ value, onChange }: { value: number; onChange: (v: numb
   return (
     <button
       className="text-[10px] text-[hsl(210,80%,65%)] hover:text-white font-mono px-0.5"
-      onClick={(e) => { e.stopPropagation(); setRaw(value.toFixed(2)); setEditing(true) }}
+      onClick={(e) => { e.stopPropagation(); setRaw(toMmss(value)); setEditing(true) }}
     >
       {formatDuration(value)}
     </button>

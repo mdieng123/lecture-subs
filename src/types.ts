@@ -18,6 +18,7 @@ export interface Project {
   projectFilePath?: string;
   youtubeUrl?: string;
   audioOnly?: boolean;
+  manualMedia?: ManualMedia[];
 }
 
 export interface Settings {
@@ -56,6 +57,16 @@ export interface Clip {
   id: string;
   title: string;
   reason: string;
+  startSeconds: number;
+  endSeconds: number;
+  cues: Cue[];
+  selected: boolean;
+}
+
+export interface ManualMedia {
+  id: string;
+  title: string;
+  kind: 'clip' | 'segment';
   startSeconds: number;
   endSeconds: number;
   cues: Cue[];
