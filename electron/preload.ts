@@ -123,6 +123,7 @@ const api = {
 
   // Utility
   getFilePath: (file: File) => webUtils.getPathForFile(file),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

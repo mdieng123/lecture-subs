@@ -36,11 +36,24 @@ export default function ImportScreen() {
   const [downloads, setDownloads] = useState<{ name: string; path: string; createdAt: number; url?: string }[]>([])
   const [pendingRestore, setPendingRestore] = useState<{ type: 'clips' | 'segments'; rawJson: string; filePath: string; youtubeUrl: string } | null>(null)
   const [recovery, setRecovery] = useState<{ videoPath: string; cueCount: number; savedAt: number; raw: string } | null>(null)
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const cancelRef = useRef(false)
 
   function refreshDownloads() {
     window.api.files.listDownloads().then(setDownloads)
   }
+
+  useEffect(() => {
+    window.api.getVersion().then((current) => {
+      fetch('https://api.github.com/repos/mdieng123/lecture-subs/releases/latest')
+        .then((r) => r.json())
+        .then((data) => {
+          const latest = (data.tag_name ?? '').replace(/^v/, '')
+          if (latest && latest !== current) setUpdateVersion(latest)
+        })
+        .catch(() => {})
+    })
+  }, [])
 
   useEffect(() => {
     refreshDownloads()
@@ -353,6 +366,22 @@ export default function ImportScreen() {
           Settings
         </button>
       </div>
+
+      {/* Update banner */}
+      {updateVersion && (
+        <div className="flex items-center gap-3 px-6 py-2.5 bg-[hsl(210,80%,20%)]/60 border-b border-[hsl(210,80%,40%)]/40 text-[hsl(210,80%,80%)] text-sm">
+          <span>Version {updateVersion} is available.</span>
+          <button
+            onClick={() => window.api.shell.openExternal('https://github.com/mdieng123/lecture-subs/releases/latest')}
+            className="px-3 py-0.5 rounded bg-[hsl(210,80%,55%)] hover:bg-[hsl(210,80%,48%)] text-white text-xs font-medium"
+          >
+            Download
+          </button>
+          <button onClick={() => setUpdateVersion(null)} className="ml-auto text-[hsl(210,80%,55%)] hover:text-white text-xs">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Recovery banner */}
       {recovery && (

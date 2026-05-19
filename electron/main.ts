@@ -160,9 +160,11 @@ ipcMain.handle('power:allowSleep', () => {
   }
 })
 
+ipcMain.handle('app:getVersion', () => app.getVersion())
+
 // Open external links safely
 ipcMain.handle('shell:openExternal', (_event, url: string) => {
-  const allowed = ['https://aistudio.google.com/apikey', 'https://console.groq.com/keys']
+  const allowed = ['https://aistudio.google.com/apikey', 'https://console.groq.com/keys', 'https://github.com/mdieng123/lecture-subs/releases/latest']
   if (allowed.includes(url)) {
     shell.openExternal(url)
   }
