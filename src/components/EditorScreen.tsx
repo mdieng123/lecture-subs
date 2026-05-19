@@ -108,7 +108,7 @@ export default function EditorScreen() {
 
   const canUndo = project.history.length > 0
   const canRedo = project.future.length > 0
-  const videoName = project.videoPath.split('/').pop() ?? 'Untitled'
+  const videoName = project.videoPath.split(/[/\\]/).pop() ?? 'Untitled'
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden" onKeyDown={handleKeyDown} tabIndex={-1}>

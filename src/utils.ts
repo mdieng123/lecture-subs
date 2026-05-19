@@ -35,6 +35,13 @@ export async function runScrutinize(
   return allIssues
 }
 
+export function toFileUrl(filePath: string): string {
+  if (!filePath) return ''
+  const normalized = filePath.replace(/\\/g, '/')
+  if (/^[a-zA-Z]:\//.test(normalized)) return `file:///${encodeURI(normalized)}`
+  return `file://${encodeURI(normalized)}`
+}
+
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)

@@ -25,6 +25,7 @@ export default function ProcessingScreen() {
   const videoPathRef = useRef<string | null>(null)
   const durationRef = useRef(0)
   const tmpDirRef = useRef<string | null>(null)
+  const pipelineStarted = useRef(false)
 
   function addLog(msg: string) {
     setProcessing((prev) => prev ? {
@@ -56,6 +57,13 @@ export default function ProcessingScreen() {
         setRateLimitSecsLeft(null)
         setRateLimitInfo(null)
         if (rateLimitTimerRef.current) { clearInterval(rateLimitTimerRef.current); rateLimitTimerRef.current = null }
+      } else if (d.status === 'translating') {
+        setProcessing((prev) => prev ? {
+          ...prev,
+          currentChunk: (d.chunkIndex ?? 0) + 1,
+          totalChunks: d.totalChunks ?? prev.totalChunks,
+        } : prev)
+        addLog(`Translating chunk ${(d.chunkIndex ?? 0) + 1}/${d.totalChunks ?? '?'}...`)
       } else if (d.status === 'quota_exhausted') {
         if (d.used && d.limit) setRateLimitInfo({ used: d.used, limit: d.limit, requested: d.requested ?? 0 })
         setRateLimitSecsLeft(null)
@@ -84,7 +92,10 @@ export default function ProcessingScreen() {
   }, [])
 
   useEffect(() => {
-    runPipeline()
+    if (pipelineStarted.current) return
+    pipelineStarted.current = true
+    window.api.power.preventSleep()
+    runPipeline().finally(() => window.api.power.allowSleep())
   }, [])
 
   async function runPipeline() {
@@ -122,10 +133,15 @@ export default function ProcessingScreen() {
       const totalDuration = extraction.duration
       const OVERLAP = 2
 
+      // Short videos always use a single chunk regardless of chunk setting — avoids MP3 re-encode timestamp drift
+      const forceOneChunk = totalDuration < 300
       // Compute chunk specs
       const chunks: Array<{ start: number; duration: number; offsetSeconds: number }> = []
+      if (forceOneChunk) {
+        chunks.push({ start: 0, duration: totalDuration, offsetSeconds: 0 })
+      }
       let cursor = 0
-      while (cursor < totalDuration) {
+      while (!forceOneChunk && cursor < totalDuration) {
         const target = cursor + chunkSeconds
         if (target >= totalDuration) {
           chunks.push({ start: cursor, duration: totalDuration - cursor, offsetSeconds: cursor })
@@ -151,26 +167,56 @@ export default function ProcessingScreen() {
       addLog(`Processing ${chunks.length} chunk(s)...`)
       setProcessing((prev) => prev ? { ...prev, totalChunks: chunks.length } : prev)
 
-      // Split and transcribe chunks (with concurrency limit)
-      const allSegments: ChunkResult[][] = new Array(chunks.length)
+      // Pass 1: Groq transcription only — all chunks must succeed before Gemini is touched
+      const allArabicCues: { start: number; end: number; arabic: string }[][] = new Array(chunks.length)
       const maxConcurrent = settings.maxConcurrentChunks
 
-      async function processChunk(i: number) {
+      async function transcribeChunk(i: number) {
         if (cancelled) return
         const chunk = chunks[i]
-        const chunkPath = `${tmpDir}/chunk-${i}.mp3`
-        await window.api.ffmpeg.splitAudio(audioPath, chunk.start, chunk.duration, chunkPath)
-        const result = await window.api.gemini.transcribeChunk(
-          chunkPath, i, chunks.length, chunk.offsetSeconds
-        )
-        if (result.error) throw new Error(`Chunk ${i}: ${result.error}`)
-        allSegments[i] = result.segments
+        // Single-chunk: send FLAC directly — skip MP3 re-encode to avoid 36ms frame-boundary drift
+        const chunkPath = chunks.length === 1 ? audioPath : `${tmpDir}/chunk-${i}.mp3`
+        if (chunks.length > 1) {
+          await window.api.ffmpeg.splitAudio(audioPath, chunk.start, chunk.duration, chunkPath)
+        }
+        const result = await window.api.gemini.transcribeChunk(chunkPath, i, chunks.length, chunk.offsetSeconds)
+        if (result.error) throw new Error(`Chunk ${i + 1}: ${result.error}`)
+        allArabicCues[i] = result.arabicCues
       }
 
-      // Process in batches
       for (let i = 0; i < chunks.length; i += maxConcurrent) {
         if (cancelled) return
-        const batch = chunks.slice(i, i + maxConcurrent).map((_, j) => processChunk(i + j))
+        const batch = chunks.slice(i, i + maxConcurrent).map((_, j) => transcribeChunk(i + j))
+        await Promise.all(batch)
+        setProcessing((prev) => prev ? { ...prev, stageProgress: ((i + maxConcurrent) / chunks.length) * 50 } : prev)
+      }
+
+      if (cancelled) return
+
+      // Pass 2: Gemini translation — only runs if ALL Groq chunks succeeded
+      addLog('Groq transcription done. Starting Gemini translation...')
+      setProcessing((prev) => prev ? { ...prev, stage: 'translating', stageProgress: 0 } : prev)
+
+      const allSegments: ChunkResult[][] = new Array(chunks.length)
+
+      async function translateChunk(i: number) {
+        if (cancelled) return
+        const result = await window.api.gemini.translateChunk(allArabicCues[i] ?? [], i, chunks.length)
+        if (result.error) throw new Error(`Chunk ${i + 1} translation: ${result.error}`)
+        allSegments[i] = result.segments
+        // Write recovery after each translation batch
+        const done = allSegments.filter(Boolean).flat()
+        if (done.length > 0) {
+          window.api.files.saveRecovery(JSON.stringify({
+            videoPath, audioOnly: processing?.audioOnly,
+            durationSeconds: durationRef.current, segments: done, savedAt: Date.now(),
+          }))
+        }
+      }
+
+      for (let i = 0; i < chunks.length; i += maxConcurrent) {
+        if (cancelled) return
+        const batch = chunks.slice(i, i + maxConcurrent).map((_, j) => translateChunk(i + j))
         await Promise.all(batch)
         setProcessing((prev) => prev ? { ...prev, stageProgress: ((i + maxConcurrent) / chunks.length) * 100 } : prev)
       }
@@ -228,6 +274,7 @@ export default function ProcessingScreen() {
       if (snapped > 0) addLog(`Snapped end time on ${snapped} cue(s) to prevent overlap.`)
 
       setPartialCues(cues)
+      window.api.files.clearRecovery()
 
       setProject({
         videoPath,
@@ -238,6 +285,7 @@ export default function ProcessingScreen() {
         future: [],
         createdAt: Date.now(),
         audioOnly: processing?.audioOnly,
+        youtubeUrl: processing?.youtubeUrl,
       })
 
     } catch (err) {
@@ -258,13 +306,15 @@ export default function ProcessingScreen() {
       future: [],
       createdAt: Date.now(),
       audioOnly: processing?.audioOnly,
+      youtubeUrl: processing?.youtubeUrl,
     })
   }
 
   const stageLabels = {
     extracting: '1. Extracting audio',
     transcribing: '2. Transcribing',
-    finalizing: '3. Finalizing',
+    translating: '3. Translating',
+    finalizing: '4. Finalizing',
   }
 
   const stage = processing?.stage ?? 'extracting'
@@ -279,12 +329,12 @@ export default function ProcessingScreen() {
       <div className="w-full max-w-xl space-y-6">
         {/* Stage indicator */}
         <div className="flex items-center gap-2 text-sm">
-          {(['extracting', 'transcribing', 'finalizing'] as const).map((s, i) => (
+          {(['extracting', 'transcribing', 'translating', 'finalizing'] as const).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               {i > 0 && <span className="text-[hsl(215,15%,40%)]">→</span>}
               <span className={s === stage ? 'text-[hsl(210,80%,65%)] font-medium' : 'text-[hsl(215,15%,45%)]'}>
                 {stageLabels[s]}
-                {s === 'transcribing' && currentChunk && totalChunks &&
+                {(s === 'transcribing' || s === 'translating') && currentChunk && totalChunks &&
                   ` (${currentChunk}/${totalChunks})`}
               </span>
             </div>

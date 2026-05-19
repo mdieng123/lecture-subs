@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, app, safeStorage } from 'electron'
 import { GoogleGenAI } from '@google/genai'
 import Store from 'electron-store'
 import fs from 'fs'
+import path from 'path'
 import { scrubError } from './store'
 
 let cancelRequested = false
@@ -87,10 +88,19 @@ function groupWordsIntoCues(words: GroqWord[]): { start: number; end: number; ar
     batch.push(w)
     const dur = batch[batch.length - 1].end - batch[0].start
     const nextGap = i + 1 < words.length ? words[i + 1].start - w.end : 999
+    const lastWord = w.word.trim()
+    const isSentenceEnd = /[.!?؟]$/.test(lastWord)
 
-    // Flush when: duration > 5s, OR 10+ words, OR long pause (>0.4s) after >= 3 words
-    const shouldFlush = dur >= 5 || batch.length >= 10 || (nextGap > 0.4 && batch.length >= 3)
-    if (shouldFlush) {
+    // Hard limits — absolute ceiling
+    const hardLimit = dur >= 10 || batch.length >= 22
+    // Natural sentence boundary after enough content
+    const sentenceBreak = isSentenceEnd && batch.length >= 5
+    // Long pause (real breath/topic shift) with enough content
+    const longPause = nextGap > 1.5 && batch.length >= 7
+    // Very long pause even with minimal content
+    const veryLongPause = nextGap > 3.0 && batch.length >= 3
+
+    if (hardLimit || sentenceBreak || longPause || veryLongPause) {
       cues.push({ start: batch[0].start, end: batch[batch.length - 1].end, arabic: batch.map((x) => x.word).join(' ') })
       batch = []
     }
@@ -101,15 +111,15 @@ function groupWordsIntoCues(words: GroqWord[]): { start: number; end: number; ar
   return cues
 }
 
-async function groqTranscribeAndTranslate(
+interface RawCue { start: number; end: number; arabic: string }
+
+async function groqTranscribeChunk(
   groqKey: string,
-  geminiKey: string,
   audioPath: string,
   chunkIndex: number,
   totalChunks: number,
   offsetSeconds: number,
-  model: string
-): Promise<Segment[]> {
+): Promise<RawCue[]> {
   const win = getMainWindow()
   sendProgress(win, { chunkIndex, totalChunks, status: 'transcribing' })
 
@@ -119,8 +129,11 @@ async function groqTranscribeAndTranslate(
   if (fileSizeMB > 24) {
     throw new Error(`Audio chunk is ${fileSizeMB.toFixed(0)} MB — Groq's limit is 25 MB. Reduce chunk size in Settings (15 min is safe).`)
   }
+  const ext = path.extname(audioPath).toLowerCase()
+  const mimeType = ext === '.flac' ? 'audio/flac' : 'audio/mpeg'
+  const filename = ext === '.flac' ? 'audio.flac' : 'audio.mp3'
   const formData = new FormData()
-  formData.append('file', new Blob([fileData], { type: 'audio/mpeg' }), 'audio.mp3')
+  formData.append('file', new Blob([fileData], { type: mimeType }), filename)
   formData.append('model', 'whisper-large-v3')
   formData.append('language', 'ar')
   formData.append('response_format', 'verbose_json')
@@ -129,7 +142,10 @@ async function groqTranscribeAndTranslate(
   const { groqRes, lastErrText } = await enqueueGroq(async () => {
     let groqRes!: Response
     let lastErrText = ''
-    for (let attempt = 1; attempt <= 4; attempt++) {
+    let nonQuotaAttempts = 0
+    // 429s retry indefinitely (Groq tells us exactly when to come back)
+    // Other errors give up after 4 attempts
+    while (true) {
       groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${groqKey}` },
@@ -149,25 +165,53 @@ async function groqTranscribeAndTranslate(
         const used = usedMatch ? Math.round(parseFloat(usedMatch[1])) : null
         const limit = limitMatch ? Math.round(parseFloat(limitMatch[1])) : null
         const requested = requestedMatch ? Math.round(parseFloat(requestedMatch[1])) : null
+        const available = (limit ?? 0) - (used ?? 0)
+        const deficit = requested !== null && limit !== null ? Math.max(0, requested - available) : 0
         const nearlyExhausted = used !== null && limit !== null && used / limit > 0.9
+        // If the chunk won't fit in remaining quota, wait long enough for the deficit to roll off
+        // the 1-hour window (~60s per minute of deficit) rather than Groq's short rate-limit reset
+        const effectiveWaitMs = deficit > 0
+          ? Math.max(waitMs, deficit * 62 * 1000)
+          : waitMs
         sendProgress(win, {
           chunkIndex, totalChunks,
           status: nearlyExhausted ? 'quota_exhausted' : 'waiting',
-          retryInMs: waitMs, used, limit, requested,
+          retryInMs: effectiveWaitMs, used, limit, requested,
         })
         if (nearlyExhausted) {
           groqQuotaExhausted = true
-          throw new Error(`QUOTA_EXHAUSTED:${used}:${limit}:${waitMs}`)
+          throw new Error(`QUOTA_EXHAUSTED:${used}:${limit}:${effectiveWaitMs}`)
         }
-        await new Promise((r) => setTimeout(r, waitMs))
+        await new Promise((r) => setTimeout(r, effectiveWaitMs))
+      } else if (groqRes.status === 500) {
+        let parsed: { error?: { type?: string } } = {}
+        try { parsed = JSON.parse(lastErrText) } catch {}
+        if (parsed?.error?.type === 'internal_server_error') {
+          groqQuotaExhausted = true
+          sendProgress(win, { chunkIndex, totalChunks, status: 'quota_exhausted', retryInMs: 7200000 })
+          throw new Error('QUOTA_EXHAUSTED_AUDIO')
+        }
+        nonQuotaAttempts++
+        if (nonQuotaAttempts >= 4) break
+        await new Promise((r) => setTimeout(r, nonQuotaAttempts * 2000))
       } else {
-        await new Promise((r) => setTimeout(r, attempt * 2000))
+        nonQuotaAttempts++
+        if (nonQuotaAttempts >= 4) break
+        await new Promise((r) => setTimeout(r, nonQuotaAttempts * 2000))
       }
     }
     return { groqRes, lastErrText }
   })
   if (!groqRes.ok) {
-    throw new Error(`Groq transcription failed: ${lastErrText || groqRes.statusText}`.replace(groqKey, '[REDACTED]'))
+    const raw = lastErrText || groqRes.statusText
+    let parsed: { error?: { type?: string; message?: string } } = {}
+    try { parsed = JSON.parse(raw) } catch {}
+    if (parsed?.error?.type === 'internal_server_error') {
+      groqQuotaExhausted = true
+      sendProgress(win, { chunkIndex, totalChunks, status: 'quota_exhausted', retryInMs: 7200000 })
+      throw new Error('QUOTA_EXHAUSTED_AUDIO')
+    }
+    throw new Error(`Groq transcription failed: ${raw}`.replace(groqKey, '[REDACTED]'))
   }
   const groqData = await groqRes.json() as { words?: GroqWord[] }
   const words = (groqData.words ?? []).filter((w) => w.word.trim().length > 0)
@@ -175,9 +219,21 @@ async function groqTranscribeAndTranslate(
 
   // Group words into subtitle-sized cues (~3-5s each)
   const rawCues = groupWordsIntoCues(words)
-  if (rawCues.length === 0) return []
+  sendProgress(win, { chunkIndex, totalChunks, status: 'done', segmentCount: rawCues.length })
+  return rawCues.map((c) => ({ start: c.start + offsetSeconds, end: c.end + offsetSeconds, arabic: c.arabic }))
+}
 
-  // Step 2: Gemini — batch translate Arabic cues to English (text only, no audio)
+async function geminiTranslateChunk(
+  geminiKey: string,
+  rawCues: RawCue[],
+  chunkIndex: number,
+  totalChunks: number,
+  model: string,
+): Promise<Segment[]> {
+  if (rawCues.length === 0) return []
+  const win = getMainWindow()
+  sendProgress(win, { chunkIndex, totalChunks, status: 'translating' })
+
   const ai = new GoogleGenAI({ apiKey: geminiKey })
   const segInput = rawCues.map((c, i) => `${i}: ${c.arabic}`).join('\n')
 
@@ -189,9 +245,9 @@ async function groqTranscribeAndTranslate(
 
 ${SALAFI_TRANSLATION_RULES}
 
-Each translation must fit on 1–2 subtitle lines (max ~42 chars per line). Be concise but never sacrifice precision.
+Each translation must fit on 1–3 subtitle lines (max ~45 chars per line). Translate the full content completely — do not summarize or omit anything. Be precise, Be concise but never sacrifice precision.
 
-Translate each numbered Arabic cue. Return a JSON array of strings — same count, same order.
+Translate each numbered Arabic cue. Return a JSON array of strings — EXACTLY ${rawCues.length} strings, same count and order as the input. Do not skip, merge, or reorder entries.
 
 Arabic cues:
 ${segInput}` }],
@@ -206,15 +262,12 @@ ${segInput}` }],
   try { translations = JSON.parse(translationResult.text ?? '[]') }
   catch { translations = rawCues.map(() => '') }
 
-  const sanitized: Segment[] = rawCues.map((c, i) => ({
-    start_seconds: c.start + offsetSeconds,
-    end_seconds: Math.max(c.end + offsetSeconds, c.start + offsetSeconds + 0.5),
+  return rawCues.map((c, i) => ({
+    start_seconds: c.start,
+    end_seconds: Math.max(c.end, c.start + 0.5),
     arabic: c.arabic,
     english: translations[i] ?? '',
   }))
-
-  sendProgress(win, { chunkIndex, totalChunks, status: 'done', segmentCount: sanitized.length })
-  return sanitized
 }
 
 const CLIPS_SCHEMA = {
@@ -420,18 +473,26 @@ ipcMain.handle(
   async (_event, audioPath: string, chunkIndex: number, totalChunks: number, offsetSeconds: number) => {
     cancelRequested = false
     groqQuotaExhausted = false
-    const apiKey = await getApiKey()
-    if (!apiKey) return { error: 'No Gemini API key configured' }
-
-    const store = new Store()
-    const model = (store.get('model') as string) ?? 'gemini-2.5-pro'
-
     try {
       const groqKey = await getGroqApiKey()
       if (!groqKey) return { error: 'Groq API key required. Add it in Settings.' }
-      const segments = await groqTranscribeAndTranslate(
-        groqKey, apiKey, audioPath, chunkIndex, totalChunks, offsetSeconds, model
-      )
+      const arabicCues = await groqTranscribeChunk(groqKey, audioPath, chunkIndex, totalChunks, offsetSeconds)
+      return { arabicCues }
+    } catch (err) {
+      return { error: scrubError(err).message }
+    }
+  }
+)
+
+ipcMain.handle(
+  'gemini:translateChunk',
+  async (_event, arabicCues: RawCue[], chunkIndex: number, totalChunks: number) => {
+    try {
+      const apiKey = await getApiKey()
+      if (!apiKey) return { error: 'No Gemini API key configured' }
+      const store = new Store()
+      const model = (store.get('model') as string) ?? 'gemini-2.5-pro'
+      const segments = await geminiTranslateChunk(apiKey, arabicCues, chunkIndex, totalChunks, model)
       return { segments }
     } catch (err) {
       return { error: scrubError(err).message }

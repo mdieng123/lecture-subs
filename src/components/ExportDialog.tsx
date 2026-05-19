@@ -71,7 +71,7 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
         endSeconds: Math.min(c.endSeconds, dur),
       })).filter((c) => c.startSeconds < c.endSeconds)
       const srtContent = serializeSrt(clampedCues, options.includeArabic)
-      const baseName = project.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'output'
+      const baseName = project.videoPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'output'
 
       if (options.mode === 'srt') {
         const savePath = await window.api.files.saveFile({

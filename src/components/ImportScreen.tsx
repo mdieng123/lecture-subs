@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import { useProjectStore } from '../state/projectStore'
 import { useClipsStore } from '../state/clipsStore'
 import { useSegmentsStore } from '../state/segmentsStore'
@@ -27,12 +28,14 @@ export default function ImportScreen() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [tab, setTab] = useState<'file' | 'youtube'>('file')
   const [audioOnly, setAudioOnly] = useState(false)
+  const [loadedYoutubeUrl, setLoadedYoutubeUrl] = useState<string | undefined>()
   const [ytUrl, setYtUrl] = useState('')
   const [ytDownloading, setYtDownloading] = useState(false)
   const [, setYtProgress] = useState(0)
   const [ytStatus, setYtStatus] = useState('')
   const [downloads, setDownloads] = useState<{ name: string; path: string; createdAt: number; url?: string }[]>([])
   const [pendingRestore, setPendingRestore] = useState<{ type: 'clips' | 'segments'; rawJson: string; filePath: string; youtubeUrl: string } | null>(null)
+  const [recovery, setRecovery] = useState<{ videoPath: string; cueCount: number; savedAt: number; raw: string } | null>(null)
   const cancelRef = useRef(false)
 
   function refreshDownloads() {
@@ -41,6 +44,15 @@ export default function ImportScreen() {
 
   useEffect(() => {
     refreshDownloads()
+    window.api.files.getRecovery().then((raw) => {
+      if (!raw) return
+      try {
+        const data = JSON.parse(raw)
+        if (data.segments?.length > 0 && Date.now() - data.savedAt < 24 * 60 * 60 * 1000) {
+          setRecovery({ videoPath: data.videoPath, cueCount: data.segments.length, savedAt: data.savedAt, raw })
+        }
+      } catch {}
+    })
   }, [])
 
   useEffect(() => {
@@ -94,12 +106,10 @@ export default function ImportScreen() {
         setLoadError('This file has no audio track. Please use a file with audio.')
         return
       }
-      const name = title ?? filePath.split('/').pop() ?? filePath
+      const name = title ?? filePath.split(/[/\\]/).pop() ?? filePath
       setVideoInfo({ path: filePath, name, size: 'unknown', duration })
       if (isAudioOnly !== undefined) setAudioOnly(isAudioOnly)
-      if (youtubeUrl) {
-        useProjectStore.getState().setProject({ ...(useProjectStore.getState().project ?? {} as any), youtubeUrl })
-      }
+      if (youtubeUrl) setLoadedYoutubeUrl(youtubeUrl)
       setTab('file')
     } catch (err) {
       setLoadError(`Could not read file: ${err instanceof Error ? err.message : String(err)}`)
@@ -116,7 +126,7 @@ export default function ImportScreen() {
           setPendingRestore({ type: 'clips', rawJson, filePath, youtubeUrl: data.youtubeUrl })
           return
         }
-        setLoadError(`Video not found: "${data.videoPath?.split('/').pop()}". Please locate it.`)
+        setLoadError(`Video not found: "${data.videoPath?.split(/[/\\]/).pop()}". Please locate it.`)
         const picked = await window.api.files.openAny()
         if (!picked || picked.endsWith('.lecturesubs') || picked.endsWith('.lectureclips')) {
           setLoadError('Could not locate video — clips not loaded.')
@@ -162,7 +172,7 @@ export default function ImportScreen() {
           setPendingRestore({ type: 'segments', rawJson, filePath, youtubeUrl: data.youtubeUrl })
           return
         }
-        setLoadError(`Video not found: "${data.videoPath?.split('/').pop()}". Please locate it.`)
+        setLoadError(`Video not found: "${data.videoPath?.split(/[/\\]/).pop()}". Please locate it.`)
         const picked = await window.api.files.openAny()
         if (!picked || picked.endsWith('.lecturesubs') || picked.endsWith('.lectureclips') || picked.endsWith('.lecturesegments')) {
           setLoadError('Could not locate video — segments not loaded.')
@@ -230,7 +240,7 @@ export default function ImportScreen() {
       const videoExists = await window.api.files.exists(project.videoPath)
       if (!videoExists) {
         const label = project.audioOnly ? 'Audio' : 'Video'
-        setLoadError(`${label} not found: "${project.videoPath.split('/').pop()}". Please locate it below.`)
+        setLoadError(`${label} not found: "${project.videoPath.split(/[/\\]/).pop()}". Please locate it below.`)
         const newVideoPath = project.audioOnly
           ? await window.api.files.openAudio()
           : await window.api.files.openAny()
@@ -320,6 +330,7 @@ export default function ImportScreen() {
       log: [`Loading: ${videoInfo.name}`],
       videoPath: videoInfo.path,
       audioOnly,
+      youtubeUrl: loadedYoutubeUrl,
     })
   }
 
@@ -342,6 +353,39 @@ export default function ImportScreen() {
           Settings
         </button>
       </div>
+
+      {/* Recovery banner */}
+      {recovery && (
+        <div className="flex items-center gap-3 px-6 py-3 bg-amber-900/40 border-b border-amber-700/50 text-amber-300 text-sm">
+          <span>⚠ Interrupted transcription recovered — {recovery.cueCount} cues from "{recovery.videoPath.split(/[/\\]/).pop()}"</span>
+          <button
+            onClick={() => {
+              try {
+                const data = JSON.parse(recovery.raw)
+                const cues = (data.segments as { start_seconds: number; end_seconds: number; arabic: string; english: string }[]).map((s) => ({
+                  id: uuidv4(),
+                  startSeconds: s.start_seconds,
+                  endSeconds: s.end_seconds,
+                  arabic: s.arabic,
+                  english: s.english,
+                }))
+                setProject({ videoPath: data.videoPath, audioPath: '', durationSeconds: data.durationSeconds ?? 0, cues, history: [], future: [], createdAt: Date.now(), audioOnly: data.audioOnly })
+                window.api.files.clearRecovery()
+                setRecovery(null)
+              } catch {}
+            }}
+            className="ml-auto px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium"
+          >
+            Open in Editor
+          </button>
+          <button
+            onClick={() => { window.api.files.clearRecovery(); setRecovery(null) }}
+            className="text-amber-500 hover:text-amber-300 text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
@@ -460,19 +504,38 @@ export default function ImportScreen() {
 
                 {downloads.length > 0 && (
                   <div className="flex flex-col gap-1.5 mt-1">
-                    <p className="text-[10px] text-[hsl(215,15%,40%)] uppercase tracking-wide">Previously downloaded</p>
-                    {downloads.map((d) => (
-                      <button
-                        key={d.path}
-                        onClick={() => loadVideo(d.path, d.name, d.url)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[hsl(220,15%,22%)] bg-[hsl(222,20%,13%)] hover:border-[hsl(220,15%,35%)] hover:bg-[hsl(222,20%,16%)] text-left transition-colors"
-                      >
-                        <span className="text-base flex-shrink-0">🎬</span>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs text-[hsl(210,20%,80%)] truncate">{d.name}</span>
-                          <span className="text-[10px] text-[hsl(215,15%,40%)]">{new Date(d.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-[hsl(215,15%,40%)] uppercase tracking-wide">Previously downloaded</p>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <div
+                          onClick={() => setAudioOnly((v) => !v)}
+                          className={`relative w-7 h-4 rounded-full transition-colors flex-shrink-0 ${audioOnly ? 'bg-[hsl(210,80%,55%)]' : 'bg-[hsl(220,15%,28%)]'}`}
+                        >
+                          <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${audioOnly ? 'translate-x-3' : 'translate-x-0.5'}`} />
                         </div>
-                      </button>
+                        <span className="text-[10px] text-[hsl(215,15%,45%)]">Audio only</span>
+                      </label>
+                    </div>
+                    {downloads.map((d) => (
+                      <div key={d.path} className="flex items-center gap-1 group">
+                        <button
+                          onClick={() => loadVideo(d.path, d.name, d.url, audioOnly || undefined)}
+                          className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-[hsl(220,15%,22%)] bg-[hsl(222,20%,13%)] hover:border-[hsl(220,15%,35%)] hover:bg-[hsl(222,20%,16%)] text-left transition-colors min-w-0"
+                        >
+                          <span className="text-base flex-shrink-0">{audioOnly ? '🎵' : '🎬'}</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs text-[hsl(210,20%,80%)] truncate">{d.name}</span>
+                            <span className="text-[10px] text-[hsl(215,15%,40%)]">{new Date(d.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={async (e) => { e.stopPropagation(); await window.api.files.deleteDownload(d.path); refreshDownloads() }}
+                          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-[hsl(215,15%,40%)] hover:text-red-400 hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-all"
+                          title="Delete"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

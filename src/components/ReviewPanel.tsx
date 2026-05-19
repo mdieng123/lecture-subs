@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useReviewStore } from '../state/reviewStore'
 import type { ReviewIssue } from '../types'
+import { toFileUrl } from '../utils'
 
 type CueLookup = (id: string) => { startSeconds: number; endSeconds: number; arabic?: string; english: string } | undefined
 type ContextLookup = (id: string) => { title: string; cueIndex: number; totalCues: number } | undefined
@@ -47,7 +48,7 @@ export default function ReviewPanel({ videoPath, getAbsoluteTime, onClose, onRer
   const rafRef = useRef<number | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
-  const videoSrc = videoPath.startsWith('/') ? `file://${encodeURI(videoPath)}` : videoPath
+  const videoSrc = toFileUrl(videoPath)
 
   useEffect(() => {
     function tick() {

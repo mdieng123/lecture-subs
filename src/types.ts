@@ -63,7 +63,7 @@ export interface Clip {
 }
 
 export interface ProcessingProgress {
-  stage: 'extracting' | 'transcribing' | 'finalizing';
+  stage: 'extracting' | 'transcribing' | 'translating' | 'finalizing';
   stageProgress: number;
   currentChunk?: number;
   totalChunks?: number;
@@ -71,6 +71,7 @@ export interface ProcessingProgress {
   error?: string;
   videoPath?: string;
   audioOnly?: boolean;
+  youtubeUrl?: string;
 }
 
 export interface SubtitleStyle {

@@ -114,6 +114,14 @@ ipcMain.handle('files:clearDownloads', () => {
   return { ok: true }
 })
 
+ipcMain.handle('files:deleteDownload', (_event, filePath: string) => {
+  const folder = path.dirname(filePath)
+  if (folder.startsWith(DOWNLOADS_DIR) && fs.existsSync(folder)) {
+    fs.rmSync(folder, { recursive: true })
+  }
+  return { ok: true }
+})
+
 ipcMain.handle('files:listDownloads', () => {
   if (!fs.existsSync(DOWNLOADS_DIR)) return []
   const videoExts = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi'])
@@ -237,5 +245,22 @@ ipcMain.handle('files:openAudio', async () => {
   })
   if (result.canceled || result.filePaths.length === 0) return null
   return result.filePaths[0]
+})
+
+const RECOVERY_PATH = path.join(app.getPath('userData'), 'recovery.json')
+
+ipcMain.handle('files:saveRecovery', (_event, data: string) => {
+  fs.writeFileSync(RECOVERY_PATH, data, 'utf-8')
+  return { ok: true }
+})
+
+ipcMain.handle('files:getRecovery', () => {
+  if (!fs.existsSync(RECOVERY_PATH)) return null
+  try { return fs.readFileSync(RECOVERY_PATH, 'utf-8') } catch { return null }
+})
+
+ipcMain.handle('files:clearRecovery', () => {
+  if (fs.existsSync(RECOVERY_PATH)) fs.unlinkSync(RECOVERY_PATH)
+  return { ok: true }
 })
 

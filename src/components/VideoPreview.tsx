@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, RefObject } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import type { Cue } from '../types'
+import { toFileUrl } from '../utils'
 
 interface Props {
   videoPath: string
@@ -56,9 +57,7 @@ export default function VideoPreview({
     }
   }, [activeCue?.id])
 
-  const videoSrc = videoPath.startsWith('/')
-    ? `file://${encodeURI(videoPath)}`
-    : videoPath
+  const videoSrc = toFileUrl(videoPath)
 
   const posClass = style.position === 'top'
     ? 'top-12'
@@ -80,7 +79,7 @@ export default function VideoPreview({
 
       {audioOnly && audioBackgroundPath && (
         <img
-          src={`file://${audioBackgroundPath}`}
+          src={toFileUrl(audioBackgroundPath)}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           alt=""
         />
@@ -106,7 +105,7 @@ export default function VideoPreview({
 
       {logo.enabled && logo.path && (
         <img
-          src={`file://${logo.path}`}
+          src={toFileUrl(logo.path)}
           className={`absolute ${LOGO_POS[logo.position]} ${LOGO_SIZE[logo.size]} pointer-events-none`}
           style={{ opacity: (logo.opacity ?? 100) / 100 }}
           alt=""

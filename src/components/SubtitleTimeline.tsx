@@ -3,6 +3,7 @@ import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import type { Cue } from '../types'
 import { useProjectStore } from '../state/projectStore'
+import { toFileUrl } from '../utils'
 
 interface Props {
   audioPath: string
@@ -40,10 +41,7 @@ export default function SubtitleTimeline({
     })
     wsRef.current = ws
 
-    const audioSrc = audioPath.startsWith('/')
-      ? `file://${encodeURI(audioPath)}`
-      : audioPath
-    ws.load(audioSrc).catch(() => {})
+    ws.load(toFileUrl(audioPath)).catch(() => {})
 
     ws.on('interaction', (newTime: number) => {
       onSeek(newTime)

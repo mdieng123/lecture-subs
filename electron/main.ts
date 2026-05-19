@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, protocol, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, protocol, Menu, powerSaveBlocker } from 'electron'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -145,6 +145,20 @@ import './ipc/files'
 import './ipc/ffmpeg'
 import './ipc/gemini'
 import './ipc/youtube'
+
+// Power management — prevent sleep during transcription
+let powerBlockerId: number | null = null
+ipcMain.handle('power:preventSleep', () => {
+  if (powerBlockerId === null) {
+    powerBlockerId = powerSaveBlocker.start('prevent-app-suspension')
+  }
+})
+ipcMain.handle('power:allowSleep', () => {
+  if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) {
+    powerSaveBlocker.stop(powerBlockerId)
+    powerBlockerId = null
+  }
+})
 
 // Open external links safely
 ipcMain.handle('shell:openExternal', (_event, url: string) => {

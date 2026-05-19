@@ -4,7 +4,7 @@ import { useClipsStore } from '../state/clipsStore'
 import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import ReviewPanel from './ReviewPanel'
-import { serializeSrt, formatDuration, runScrutinize } from '../utils'
+import { serializeSrt, formatDuration, runScrutinize, toFileUrl } from '../utils'
 import type { Clip, Cue } from '../types'
 
 const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22, xl: 30, xxl: 40 }
@@ -61,7 +61,7 @@ export default function ClipsScreen() {
   async function handleSave() {
     setSaving(true)
     try {
-      const defaultName = project?.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'clips'
+      const defaultName = project?.videoPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'clips'
       const savePath = savedFilePath ?? await window.api.files.saveFile({
         defaultPath: `${defaultName}.lectureclips`,
         filters: [{ name: 'LectureSubs Clips', extensions: ['lectureclips'] }],
@@ -98,7 +98,7 @@ export default function ClipsScreen() {
     const baseFolder = await window.api.files.pickFolder()
     if (!baseFolder) return
 
-    const videoName = useProjectStore.getState().project?.videoPath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'clips'
+    const videoName = useProjectStore.getState().project?.videoPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'clips'
     const safeName = videoName.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
     const folder = `${baseFolder}/Clips - ${safeName}`
     await window.api.files.mkdir(folder)
@@ -114,7 +114,7 @@ export default function ClipsScreen() {
         await window.api.files.writeFile(srtPath, srtContent)
 
         const safeName = clip.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
-        const outputPath = `${folder}${safeName}_${i + 1}.mp4`
+        const outputPath = `${folder}/${safeName}_${i + 1}.mp4`
 
         const logo = useProjectStore.getState().logoSettings
         const style = useProjectStore.getState().subtitleStyle
@@ -338,9 +338,7 @@ function ClipCard({ clip }: { clip: Clip }) {
     else { el.pause(); setPlaying(false) }
   }
 
-  const videoSrc = project?.videoPath.startsWith('/')
-    ? `file://${encodeURI(project.videoPath)}`
-    : project?.videoPath ?? ''
+  const videoSrc = toFileUrl(project?.videoPath ?? '')
 
   return (
     <div className={`flex flex-col rounded-lg border transition-colors ${clip.selected ? 'border-[hsl(210,60%,45%)] bg-[hsl(222,20%,14%)]' : 'border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)]'}`}>
@@ -397,7 +395,7 @@ function ClipCard({ clip }: { clip: Clip }) {
         )}
         {logo.enabled && logo.path && (
           <img
-            src={`file://${logo.path}`}
+            src={toFileUrl(logo.path)}
             className={`absolute pointer-events-none ${
               logo.size === 'small' ? 'w-[10%]' : logo.size === 'large' ? 'w-[22%]' : 'w-[15%]'
             } ${

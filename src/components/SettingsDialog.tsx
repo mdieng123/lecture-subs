@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import type { Settings } from '../types'
+import { toFileUrl } from '../utils'
 
 const INTRO_MAX_SECONDS = 20
 
@@ -180,17 +181,17 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             </label>
             <input
               type="range"
-              min={5}
+              min={1}
               max={30}
-              step={5}
+              step={1}
               value={settings.chunkMinutes}
               onChange={(e) => handleSettingChange({ chunkMinutes: parseInt(e.target.value, 10) })}
               className="w-full accent-[hsl(210,80%,55%)]"
             />
             <div className="flex justify-between text-[10px] text-[hsl(215,15%,40%)] mt-0.5">
-              <span>5 min</span><span>30 min</span>
+              <span>1 min</span><span>30 min</span>
             </div>
-            <p className="text-[10px] text-[hsl(215,15%,42%)] mt-1.5">Under 15 min video → 5 min · 15–60 min → 15 min · 60 min+ → 20 min. Don't exceed 20 min — larger chunks hit Groq's 25 MB upload limit.</p>
+            <p className="text-[10px] text-[hsl(215,15%,42%)] mt-1.5">Under 5 min → single chunk (ignore this). 5–60 min → 5–15 min chunks. 60 min+ → 15–20 min. Don't exceed 20 min — larger chunks approach Groq's 25 MB limit. Use 1–3 min only if subtitles feel out of sync on short videos.</p>
           </div>
 
           {/* Max concurrent chunks */}
@@ -276,7 +277,7 @@ function LogoSection() {
       </label>
       {logoSettings.path ? (
         <div className="flex items-center gap-3">
-          <img src={`file://${logoSettings.path}`} className="h-10 w-auto rounded border border-[hsl(220,15%,25%)]" alt="logo" />
+          <img src={toFileUrl(logoSettings.path)} className="h-10 w-auto rounded border border-[hsl(220,15%,25%)]" alt="logo" />
           <span className="text-xs text-green-400">Uploaded</span>
           <button onClick={handlePickLogo} className="text-xs text-[hsl(215,15%,45%)] hover:text-white">Replace</button>
           <button onClick={handleRemoveLogo} className="ml-auto text-xs text-[hsl(215,15%,40%)] hover:text-red-400">Remove</button>
@@ -317,7 +318,7 @@ function IntroVideoSection() {
     setDurationError(null)
   }
 
-  const filename = introVideoPath?.split('/').pop() ?? null
+  const filename = introVideoPath?.split(/[/\\]/).pop() ?? null
 
   return (
     <div>
@@ -368,7 +369,7 @@ function AudioBackgroundSection() {
       </label>
       {audioBackgroundPath ? (
         <div className="flex items-center gap-3">
-          <img src={`file://${audioBackgroundPath}`} className="h-10 w-auto rounded border border-[hsl(220,15%,25%)]" alt="bg" />
+          <img src={toFileUrl(audioBackgroundPath)} className="h-10 w-auto rounded border border-[hsl(220,15%,25%)]" alt="bg" />
           <span className="text-xs text-green-400">Uploaded</span>
           <button onClick={handlePickBg} className="text-xs text-[hsl(215,15%,45%)] hover:text-white">Replace</button>
           <button onClick={handleRemoveBg} className="ml-auto text-xs text-[hsl(215,15%,40%)] hover:text-red-400">Remove</button>
