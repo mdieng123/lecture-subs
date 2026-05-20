@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Screen recordings (raw source, not committed)
+*.mov
+
 # Build output
 dist/
 dist-electron/

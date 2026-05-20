@@ -85,6 +85,31 @@
       overflow: hidden;
     }
 
+    .hero-video-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      opacity: 0.18;
+      pointer-events: none;
+      will-change: opacity;
+    }
+
+    .hero-video-overlay {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to bottom,
+          rgba(7, 13, 28, 0.45) 0%,
+          rgba(7, 13, 28, 0.1) 40%,
+          rgba(7, 13, 28, 0.85) 85%,
+          var(--bg) 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
     .hero::before {
       content: '';
       position: absolute;
@@ -93,12 +118,18 @@
         radial-gradient(ellipse 70% 55% at 50% 40%, rgba(30, 70, 160, 0.25) 0%, transparent 70%),
         radial-gradient(ellipse 40% 30% at 80% 10%, rgba(20, 120, 110, 0.12) 0%, transparent 60%);
       pointer-events: none;
+      z-index: 1;
       animation: bgshift 12s ease-in-out infinite alternate;
     }
 
     @keyframes bgshift {
       from { opacity: 0.8; transform: scale(1); }
       to   { opacity: 1;   transform: scale(1.04); }
+    }
+
+    .hero > *:not(.hero-video-bg):not(.hero-video-overlay) {
+      position: relative;
+      z-index: 2;
     }
 
     .hero-rule {
@@ -451,6 +482,10 @@
 
   <!-- Hero -->
   <section class="hero">
+    <video class="hero-video-bg" id="hero-video" autoplay muted loop playsinline preload="auto">
+      <source src="demo.mp4" type="video/mp4">
+    </video>
+    <div class="hero-video-overlay"></div>
     <div class="hero-rule reveal"></div>
     <h1 class="reveal reveal-d1">Carry the words of the scholars<br /><em>to those who cannot yet reach them in Arabic.</em></h1>
     <div class="hero-sub reveal reveal-d2">
@@ -569,6 +604,15 @@
       .catch(() => {
         document.getElementById('version-tag').textContent = ''
       })
+
+    // ── Hero video scroll fade ─────────────────────────────────────────────
+    const heroVideo = document.getElementById('hero-video')
+    const BASE_OPACITY = 0.18
+    function updateVideoOpacity() {
+      const progress = Math.min(window.scrollY / (window.innerHeight * 0.55), 1)
+      heroVideo.style.opacity = BASE_OPACITY * (1 - progress)
+    }
+    window.addEventListener('scroll', updateVideoOpacity, { passive: true })
 
     // ── Scroll reveal ──────────────────────────────────────────────────────
     const observer = new IntersectionObserver((entries) => {
