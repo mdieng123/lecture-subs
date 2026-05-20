@@ -77,6 +77,21 @@ Click **Save** at any point to save a `.lecturesubs` project file. Reopen it by 
 | Max concurrent chunks | How many chunks are processed in parallel (more = faster but uses more API quota) |
 | YouTube Downloads | Shows disk usage of downloaded videos with a clear button |
 
+## Security & Privacy
+
+**Keychain prompt (macOS):** When you save an API key in Settings, macOS will ask LectureSubs to access the Keychain. This is expected and intentional — the app uses Electron's `safeStorage` API to encrypt your keys with a system-managed key before writing them to disk. Your keys are never stored in plain text.
+
+**What leaves your device:**
+| Data | Destination | Why |
+|---|---|---|
+| Audio chunks (no video) | Groq API | Speech-to-text transcription |
+| Arabic + English transcript text | Google Gemini API | Translation |
+| YouTube URL | yt-dlp → YouTube servers | Video download |
+
+**What stays local:** Video files, project files (`.lecturesubs`), exports, and subtitles never leave your device. No analytics, no telemetry, no account required.
+
+**API keys** are encrypted on disk using your OS keychain and only sent to their respective services (Groq / Google). They are never shared with any third party.
+
 ## Development
 
 ```bash
