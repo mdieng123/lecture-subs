@@ -1,0 +1,119 @@
+────────────────────────────────────────────
+  LectureSubs — Windows Build Guide
+  (for the collaborator doing the Windows .exe)
+────────────────────────────────────────────
+
+
+──────────────────────────────────────
+  STEP 1 — INSTALL PREREQUISITES
+  (one time only)
+──────────────────────────────────────
+1. Install Node.js 20 or higher:
+   https://nodejs.org  →  click "LTS" → download → install
+
+2. Install Git:
+   https://git-scm.com  →  download → install (all defaults are fine)
+
+3. Restart your computer after installing both.
+
+
+──────────────────────────────────────
+  STEP 2 — CLONE THE REPO
+  (one time only)
+──────────────────────────────────────
+1. Open a terminal (search "cmd" or "PowerShell" in Start menu)
+
+2. Run:
+   git clone https://github.com/mdieng123/lecture-subs.git
+   cd lecture-subs
+
+3. Install dependencies:
+   npm install
+
+   This will also automatically download the Windows yt-dlp binary.
+   It takes a minute — let it finish.
+
+
+──────────────────────────────────────
+  STEP 3 — BUILD THE .EXE
+──────────────────────────────────────
+Every time you want to make a new build, do this:
+
+1. Pull the latest code:
+   git pull origin main
+
+2. Build:
+   npm run dist
+
+3. When it finishes, your installer is at:
+   release\LectureSubs-X.X.X-Setup.exe
+
+   (X.X.X will be the current version number, e.g. 0.1.0)
+
+
+──────────────────────────────────────
+  STEP 4 — UPLOAD TO GITHUB RELEASE
+──────────────────────────────────────
+1. Go to:
+   https://github.com/mdieng123/lecture-subs/releases
+
+2. Click the release that matches your version (e.g. v0.1.0)
+
+3. Click "Edit release" (pencil icon, top right of the release)
+
+4. Scroll down to "Assets"
+
+5. Drag your .exe file from the release\ folder into the Assets box
+   File name looks like: LectureSubs-0.1.0-Setup.exe
+
+6. Click "Update release"
+
+Done. The file is now live on the release page.
+
+
+──────────────────────────────────────
+  STEP 5 — UPDATE THE WEBSITE
+──────────────────────────────────────
+After uploading, update the Windows download URL on the website:
+
+1. In your terminal (inside the lecture-subs folder):
+   git pull origin main
+
+2. Open docs\version.json in Notepad (or any text editor)
+   It looks like this:
+   {
+     "version": "0.1.0",
+     "downloads": {
+       "mac": "https://github.com/...dmg",
+       "win": "#"
+     }
+   }
+
+3. Replace the "win" line with the actual download URL.
+   The URL format is:
+   https://github.com/mdieng123/lecture-subs/releases/download/v0.1.0/LectureSubs-0.1.0-Setup.exe
+
+   (adjust version number if different)
+
+4. Save the file, then run:
+   git add docs/version.json
+   git commit -m "Add Windows download link v0.1.0"
+   git push origin main
+
+The Windows download button on the website will go live
+within about 1 minute.
+
+
+──────────────────────────────────────
+  FUTURE BUILDS (already set up)
+──────────────────────────────────────
+For any future version, just repeat Steps 3-5.
+Step 1 and 2 never need to be done again.
+
+  git pull origin main   ← always do this first
+  npm run dist           ← builds the new .exe
+  → upload to GitHub release page
+  → update docs/version.json
+  → git add / commit / push
+
+────────────────────────────────────────────
