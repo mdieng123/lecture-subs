@@ -25,7 +25,7 @@ jobs:
       - run: npm ci
 
       - name: Build DMG
-        run: npm run dist
+        run: npm run dist -- --publish never
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
