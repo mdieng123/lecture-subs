@@ -174,8 +174,8 @@ export default function EditorScreen() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden" onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)] flex-shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)] flex-shrink-0 [-webkit-app-region:drag]">
+        <div className="flex items-center gap-3 [-webkit-app-region:no-drag]">
           <button
             onClick={() => {
               if (confirm('Close project? Unsaved changes will be lost.')) {
@@ -189,7 +189,7 @@ export default function EditorScreen() {
           </button>
           <span className="text-sm font-medium truncate max-w-xs">{videoName}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 [-webkit-app-region:no-drag]">
           {saveMsg && <span className="text-xs text-green-400">{saveMsg}</span>}
           <button
             onClick={handleSave}

@@ -176,15 +176,15 @@ export default function YoutubeScreen() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)] flex-shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[hsl(220,15%,22%)] bg-[hsl(222,20%,12%)] flex-shrink-0 [-webkit-app-region:drag]">
+        <div className="flex items-center gap-3 [-webkit-app-region:no-drag]">
           <button onClick={handleBack} className="text-[hsl(215,15%,50%)] hover:text-white text-sm">
             ← Back
           </button>
           <span className="text-sm font-medium">YouTube Segments</span>
           <span className="text-xs text-[hsl(215,15%,45%)]">{segments.length} segments</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 [-webkit-app-region:no-drag]">
           <button onClick={selectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">Select all</button>
           <button onClick={deselectAll} className="text-xs text-[hsl(215,15%,50%)] hover:text-white px-2 py-1">None</button>
           {!isManualPreview && (

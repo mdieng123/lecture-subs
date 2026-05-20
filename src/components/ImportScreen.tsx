@@ -389,11 +389,11 @@ export default function ImportScreen() {
   return (
     <div className="flex-1 flex flex-col">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(220,15%,22%)]">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(220,15%,22%)] [-webkit-app-region:drag]">
         <span className="text-lg font-semibold tracking-tight">LectureSubs</span>
         <button
           onClick={() => setSettingsOpen(true)}
-          className="text-sm text-[hsl(215,15%,55%)] hover:text-white transition-colors px-3 py-1 rounded hover:bg-[hsl(222,20%,18%)]"
+          className="text-sm text-[hsl(215,15%,55%)] hover:text-white transition-colors px-3 py-1 rounded hover:bg-[hsl(222,20%,18%)] [-webkit-app-region:no-drag]"
         >
           Settings
         </button>
