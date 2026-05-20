@@ -115,24 +115,28 @@
       bottom: 2rem;
       right: 2rem;
       z-index: 3;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      padding: 0.5rem 0.9rem;
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 0.45rem;
       cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
-      color: rgba(255,255,255,0.55);
-      backdrop-filter: blur(8px);
+      transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+      color: rgba(255,255,255,0.75);
+      backdrop-filter: blur(10px);
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      font-family: inherit;
     }
     .hero-unmute:hover {
-      background: rgba(255,255,255,0.14);
-      border-color: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.18);
+      border-color: rgba(255,255,255,0.38);
       color: #fff;
     }
+    .hero-unmute-label { line-height: 1; }
 
     .hero::before {
       content: '';
@@ -510,14 +514,15 @@
       <source src="demo.mp4" type="video/mp4">
     </video>
     <div class="hero-video-overlay"></div>
-    <button class="hero-unmute" id="hero-unmute" title="Unmute">
-      <svg id="unmute-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <button class="hero-unmute" id="hero-unmute">
+      <svg id="unmute-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="1" y1="1" x2="23" y2="23"/>
         <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
         <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
         <line x1="12" y1="19" x2="12" y2="23"/>
         <line x1="8" y1="23" x2="16" y2="23"/>
       </svg>
+      <span class="hero-unmute-label" id="unmute-label">Tap to unmute</span>
     </button>
     <div class="hero-rule reveal"></div>
     <h1 class="reveal reveal-d1">Carry the words of the scholars<br /><em>to those who cannot yet reach them in Arabic.</em></h1>
@@ -642,6 +647,7 @@
     const heroVideo = document.getElementById('hero-video')
     const unmuteBtn = document.getElementById('hero-unmute')
     const unmuteIcon = document.getElementById('unmute-icon')
+    const unmuteLabel = document.getElementById('unmute-label')
     const BASE_OPACITY = 0.32
 
     heroVideo.volume = 0.25
@@ -653,7 +659,7 @@
       heroVideo.muted = !heroVideo.muted
       if (!heroVideo.muted) heroVideo.play()
       unmuteIcon.innerHTML = heroVideo.muted ? iconMuted : iconUnmuted
-      unmuteBtn.title = heroVideo.muted ? 'Unmute' : 'Mute'
+      unmuteLabel.textContent = heroVideo.muted ? 'Tap to unmute' : 'Mute'
     })
 
     function updateVideoOpacity() {
