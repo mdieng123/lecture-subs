@@ -1,0 +1,88 @@
+────────────────────────────────────────────
+  LectureSubs — Release & Update Workflow
+────────────────────────────────────────────
+
+
+──────────────────────────────────────
+  EVERYDAY DEVELOPMENT (no release)
+──────────────────────────────────────
+Just code and push normally. Nothing gets released.
+
+  git add .
+  git commit -m "your message"
+  git push origin main
+
+
+──────────────────────────────────────
+  REPLACE THE CURRENT DMG (same version)
+  Use this when you've made fixes but don't
+  want to bump the version number yet.
+──────────────────────────────────────
+1. Push your changes to main (as above)
+
+2. Go to:
+   https://github.com/mdieng123/lecture-subs/actions
+
+3. Click "Release" in the left sidebar
+
+4. Click "Run workflow" (top right)
+
+5. Leave tag as "v0.1.0" → click the green "Run workflow" button
+
+6. Wait ~3 minutes. GitHub builds a fresh DMG from your
+   latest code and replaces the one on the release page.
+
+Done. The download link stays the same. No version bump needed.
+
+
+──────────────────────────────────────
+  SHIP A NEW VERSION (e.g. v0.2.0)
+──────────────────────────────────────
+1. Push all your changes to main
+
+2. Update docs/version.json with the new version:
+   {
+     "version": "0.2.0",
+     "downloads": {
+       "mac": "https://github.com/mdieng123/lecture-subs/releases/download/v0.2.0/LectureSubs-0.2.0-arm64.dmg",
+       "win": "#"
+     }
+   }
+
+3. Commit and push that change:
+   git add docs/version.json
+   git commit -m "Bump version to 0.2.0"
+   git push origin main
+
+4. Create and push the new tag:
+   git tag v0.2.0
+   git push origin v0.2.0
+
+5. GitHub Actions automatically triggers, builds the DMG,
+   creates the release, and uploads the file.
+   Watch progress at:
+   https://github.com/mdieng123/lecture-subs/actions
+
+Done. The website download button will now point to v0.2.0.
+
+
+──────────────────────────────────────
+  WINDOWS (when you get the .exe)
+──────────────────────────────────────
+1. Upload the .exe manually to the release page on GitHub:
+   https://github.com/mdieng123/lecture-subs/releases/tag/v0.1.0
+
+2. Update the "win" URL in docs/version.json
+
+3. Push the version.json change to main
+
+
+──────────────────────────────────────
+  QUICK REFERENCE
+──────────────────────────────────────
+  Replace DMG, same version  →  Actions → Run workflow → v0.1.0
+  New version release        →  git tag v0.2.0&& git push origin v0.2.0
+  Website source             →  docs/index.html
+  Version/download URLs      →  docs/version.json
+  Build output (local only)  →  release/  (gitignored)
+────────────────────────────────────────────

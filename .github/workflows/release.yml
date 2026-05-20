@@ -36,5 +36,7 @@ jobs:
           files: |
             release/*.dmg
             release/latest-mac.yml
+          fail_on_unmatched_files: true
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
