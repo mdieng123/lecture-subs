@@ -151,7 +151,7 @@
       to   { opacity: 1;   transform: scale(1.04); }
     }
 
-    .hero > *:not(.hero-video-bg):not(.hero-video-overlay) {
+    .hero > *:not(.hero-video-bg):not(.hero-video-overlay):not(.hero-unmute) {
       position: relative;
       z-index: 2;
     }
@@ -651,6 +651,7 @@
 
     unmuteBtn.addEventListener('click', () => {
       heroVideo.muted = !heroVideo.muted
+      if (!heroVideo.muted) heroVideo.play()
       unmuteIcon.innerHTML = heroVideo.muted ? iconMuted : iconUnmuted
       unmuteBtn.title = heroVideo.muted ? 'Unmute' : 'Mute'
     })
