@@ -4,7 +4,7 @@ import { useClipsStore, buildClipsFromSuggestions } from '../state/clipsStore'
 import { serializeSrt } from '../utils'
 import type { ExportOptions } from '../types'
 
-export default function ExportDialog({ onClose }: { onClose: () => void }) {
+export default function ExportDialog({ onClose, onCreateSegments }: { onClose: () => void; onCreateSegments?: () => void }) {
   const project = useProjectStore((s) => s.project)
   const setScreen = useProjectStore((s) => s.setScreen)
   const subtitleStyle = useProjectStore((s) => s.subtitleStyle)
@@ -56,6 +56,19 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
     const clips = buildClipsFromSuggestions(project.cues, (result as any).clips ?? [])
     setClips(clips)
     setDetecting(false)
+  }
+
+  async function handleDownloadTranscript() {
+    if (!project) return
+    const text = project.cues.map((c) => c.english.trim()).filter(Boolean).join('\n')
+    const baseName = project.videoPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'transcript'
+    const savePath = await window.api.files.saveFile({
+      defaultPath: `${baseName}_transcript.txt`,
+      filters: [{ name: 'Text File', extensions: ['txt'] }],
+    })
+    if (!savePath) return
+    await window.api.files.writeFile(savePath, text)
+    setDone(true)
   }
 
   async function handleExport() {
@@ -201,13 +214,31 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
               </div>
             )}
 
-            <button
-              onClick={handleCreateClips}
-              className="w-full mb-3 px-4 py-2 rounded border border-[hsl(280,60%,50%)] text-[hsl(280,70%,75%)] hover:bg-[hsl(280,30%,20%)] text-sm transition-colors text-left flex items-center gap-2"
-            >
-              <span>✦</span>
-              <span>Create Intelligent Clips (Instagram / TikTok / Shorts)</span>
-            </button>
+            <div className="space-y-2 mb-3">
+              <button
+                onClick={handleCreateClips}
+                className="w-full px-4 py-2 rounded border border-[hsl(280,60%,50%)] text-[hsl(280,70%,75%)] hover:bg-[hsl(280,30%,20%)] text-sm transition-colors text-left flex items-center gap-2"
+              >
+                <span>✦</span>
+                <span>Create Intelligent Clips (Instagram / TikTok / Shorts)</span>
+              </button>
+              {onCreateSegments && (
+                <button
+                  onClick={() => { onClose(); onCreateSegments() }}
+                  className="w-full px-4 py-2 rounded border border-[hsl(200,60%,45%)] text-[hsl(200,70%,70%)] hover:bg-[hsl(200,30%,18%)] text-sm transition-colors text-left flex items-center gap-2"
+                >
+                  <span>✦</span>
+                  <span>Create YouTube Segments (split long lecture)</span>
+                </button>
+              )}
+              <button
+                onClick={handleDownloadTranscript}
+                className="w-full px-4 py-2 rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,70%)] hover:bg-[hsl(220,15%,20%)] text-sm transition-colors text-left flex items-center gap-2"
+              >
+                <span>↓</span>
+                <span>Download Transcript (.txt)</span>
+              </button>
+            </div>
 
             <div className="flex justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 text-sm text-[hsl(215,15%,55%)] hover:text-white">

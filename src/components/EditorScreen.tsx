@@ -229,14 +229,6 @@ export default function EditorScreen() {
               </span>
             )}
           </button>
-          {project.durationSeconds >= 1500 && (
-            <button
-              onClick={() => setSegmentModalOpen(true)}
-              className="px-3 py-1.5 text-sm rounded border border-[hsl(220,15%,30%)] text-[hsl(210,20%,80%)] hover:text-white hover:border-[hsl(220,15%,45%)] transition-colors"
-            >
-              YouTube Videos
-            </button>
-          )}
           <div className="flex items-center gap-2">
             {reviewStore.status !== 'done' && reviewStore.issues.length === 0 && (
               <span className="text-[11px] text-amber-400/80" title="Run a review before exporting to catch transcription or translation issues">
@@ -310,7 +302,12 @@ export default function EditorScreen() {
         />
       </div>
 
-      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
+      {exportOpen && (
+        <ExportDialog
+          onClose={() => setExportOpen(false)}
+          onCreateSegments={project && project.durationSeconds >= 1500 ? () => setSegmentModalOpen(true) : undefined}
+        />
+      )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
 
       {createMediaPending && (
