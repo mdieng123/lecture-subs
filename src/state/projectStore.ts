@@ -28,6 +28,7 @@ interface ProjectStore {
   setGroqQuotaExhaustedAt: (v: number | null) => void
   setSettings: (s: Partial<Settings>) => void
   setSubtitleStyle: (s: Partial<SubtitleStyle>) => void
+  setTrim: (start: number | null, end: number | null) => void
   setIntroVideoPath: (p: string | null) => void
   setAudioBackgroundPath: (p: string | null) => void
 
@@ -90,6 +91,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setLogoSettings: (s) => set((state) => ({ logoSettings: { ...state.logoSettings, ...s } })),
   setSettings: (s) => set((state) => ({ settings: { ...state.settings, ...s } })),
   setSubtitleStyle: (s) => set((state) => ({ subtitleStyle: { ...state.subtitleStyle, ...s } })),
+  setTrim: (start, end) => set((s) => s.project ? { project: { ...s.project, trimStart: start ?? undefined, trimEnd: end ?? undefined } } : {}),
   setIntroVideoPath: (p) => set({ introVideoPath: p }),
   setAudioBackgroundPath: (p) => set({ audioBackgroundPath: p }),
 

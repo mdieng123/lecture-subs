@@ -14,6 +14,7 @@ import SettingsDialog from './SettingsDialog'
 import ReviewPanel from './ReviewPanel'
 import CreateMediaDialog from './CreateMediaDialog'
 import ManualMediaStrip from './ManualMediaStrip'
+import TrimBar from './TrimBar'
 
 
 const MAX_CUE_DURATION = 7
@@ -72,6 +73,7 @@ export default function EditorScreen() {
   const reviewStore = useReviewStore()
   const addManualMedia = useProjectStore((s) => s.addManualMedia)
   const deleteManualMedia = useProjectStore((s) => s.deleteManualMedia)
+  const setTrim = useProjectStore((s) => s.setTrim)
   const clipsStore = useClipsStore()
 
   const handleSeek = useCallback((time: number) => {
@@ -264,6 +266,14 @@ export default function EditorScreen() {
             onCueSelect={setSelectedCueId}
             videoRef={videoRef}
             selectedCueId={selectedCueId}
+          />
+          <TrimBar
+            currentTime={currentTime}
+            duration={project.durationSeconds}
+            trimStart={project.trimStart ?? null}
+            trimEnd={project.trimEnd ?? null}
+            onSetTrim={setTrim}
+            onSeek={(t) => { if (videoRef.current) videoRef.current.currentTime = t }}
           />
           <SubtitleStyleBar />
         </div>

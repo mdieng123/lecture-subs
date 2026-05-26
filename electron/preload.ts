@@ -69,8 +69,8 @@ const api = {
       ipcRenderer.invoke('ffmpeg:detectSilences', audioPath),
     splitAudio: (audioPath: string, start: number, duration: number, outputPath: string) =>
       ipcRenderer.invoke('ffmpeg:splitAudio', audioPath, start, duration, outputPath),
-    exportSoftSubs: (videoPath: string, srtPath: string, outputPath: string) =>
-      ipcRenderer.invoke('ffmpeg:exportSoftSubs', videoPath, srtPath, outputPath),
+    exportSoftSubs: (videoPath: string, srtPath: string, outputPath: string, opts?: Record<string, unknown>) =>
+      ipcRenderer.invoke('ffmpeg:exportSoftSubs', videoPath, srtPath, outputPath, opts),
     exportHardSubs: (videoPath: string, srtPath: string, outputPath: string, opts: Record<string, unknown>) =>
       ipcRenderer.invoke('ffmpeg:exportHardSubs', videoPath, srtPath, outputPath, opts),
     exportClip: (videoPath: string, srtPath: string, startSeconds: number, durationSeconds: number, outputPath: string, opts: Record<string, unknown>) =>

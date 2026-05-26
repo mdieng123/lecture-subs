@@ -43,7 +43,7 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
 
     const pad = (n: number) => String(Math.floor(n)).padStart(2, '0')
     const fmt = (s: number) => `${pad(s / 60)}:${pad(s % 60)}`
-    const transcript = project.cues
+    const transcript = trimmedCues()
       .map((c) => `[${fmt(c.startSeconds)}-${fmt(c.endSeconds)}] "${c.english}"`)
       .join('\n')
 
@@ -58,9 +58,22 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
     setDetecting(false)
   }
 
+  function trimmedCues() {
+    if (!project) return []
+    const start = project.trimStart ?? 0
+    const end = project.trimEnd ?? project.durationSeconds
+    return project.cues
+      .filter((c) => c.endSeconds > start && c.startSeconds < end)
+      .map((c) => ({
+        ...c,
+        startSeconds: Math.max(0, c.startSeconds - start),
+        endSeconds: Math.min(end - start, c.endSeconds - start),
+      }))
+  }
+
   async function handleDownloadTranscript() {
     if (!project) return
-    const text = project.cues.map((c) => c.english.trim()).filter(Boolean).join('\n')
+    const text = trimmedCues().map((c) => c.english.trim()).filter(Boolean).join('\n')
     const baseName = project.videoPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'transcript'
     const savePath = await window.api.files.saveFile({
       defaultPath: `${baseName}_transcript.txt`,
@@ -77,11 +90,14 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
     setError(null)
 
     try {
-      const dur = project.durationSeconds
-      const clampedCues = project.cues.map((c) => ({
+      const trimStart = project.trimStart ?? 0
+      const trimEnd = project.trimEnd ?? project.durationSeconds
+      const keepDuration = trimEnd - trimStart
+
+      const clampedCues = trimmedCues().map((c) => ({
         ...c,
-        startSeconds: Math.min(c.startSeconds, dur),
-        endSeconds: Math.min(c.endSeconds, dur),
+        startSeconds: Math.min(c.startSeconds, keepDuration),
+        endSeconds: Math.min(c.endSeconds, keepDuration),
       })).filter((c) => c.startSeconds < c.endSeconds)
       const srtContent = serializeSrt(clampedCues, options.includeArabic)
       const baseName = project.videoPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'output'
@@ -120,8 +136,12 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
 
       const mainExportPath = hasIntro ? `${tmpDir}/main_export.mp4` : savePath
 
+      const trimOpts = trimStart > 0 || trimEnd < project.durationSeconds
+        ? { trimStart, trimEnd }
+        : {}
+
       if (options.mode === 'soft') {
-        await window.api.ffmpeg.exportSoftSubs(videoSource, srtPath, mainExportPath)
+        await window.api.ffmpeg.exportSoftSubs(videoSource, srtPath, mainExportPath, trimOpts)
       } else {
         const fontSizeMap = { small: 18, medium: 22, large: 28, xl: 38, xxl: 52 }
         await window.api.ffmpeg.exportHardSubs(videoSource, srtPath, mainExportPath, {
@@ -134,6 +154,7 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
             logoPosition: logoSettings.position,
             logoSize: logoSettings.size,
           } : {}),
+          ...trimOpts,
         })
       }
 

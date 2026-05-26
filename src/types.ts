@@ -19,6 +19,8 @@ export interface Project {
   youtubeUrl?: string;
   audioOnly?: boolean;
   manualMedia?: ManualMedia[];
+  trimStart?: number;
+  trimEnd?: number;
 }
 
 export type TargetLanguage = 'english' | 'spanish' | 'french' | 'indonesian' | 'bengali' | 'urdu'

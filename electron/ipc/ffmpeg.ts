@@ -359,11 +359,16 @@ ipcMain.handle('ffmpeg:exportSoftSubs', (
   _event,
   videoPath: string,
   srtPath: string,
-  outputPath: string
+  outputPath: string,
+  opts?: { trimStart?: number; trimEnd?: number }
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const win = getMainWindow()
-    ffmpeg(videoPath)
+    const cmd = ffmpeg()
+    if (opts?.trimStart) cmd.inputOptions([`-ss ${opts.trimStart}`])
+    cmd.input(videoPath)
+    if (opts?.trimEnd) cmd.inputOptions([`-to ${opts.trimEnd}`])
+    cmd
       .input(srtPath)
       .outputOptions(['-c copy', '-c:s mov_text', '-metadata:s:s:0 language=eng'])
       .output(outputPath)
@@ -391,6 +396,8 @@ ipcMain.handle('ffmpeg:exportHardSubs', (
     logoPosition?: string
     logoSize?: string
     logoOpacity?: number
+    trimStart?: number
+    trimEnd?: number
   }
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -409,7 +416,10 @@ ipcMain.handle('ffmpeg:exportHardSubs', (
     const escapedSrt = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:')
     const subtitleFilter = `subtitles=${escapedSrt}:force_style='FontName=Inter,FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
 
-    const cmd = ffmpeg(videoPath)
+    const cmd = ffmpeg()
+    if (opts.trimStart) cmd.inputOptions([`-ss ${opts.trimStart}`])
+    cmd.input(videoPath)
+    if (opts.trimEnd) cmd.inputOptions([`-to ${opts.trimEnd}`])
     if (opts.logoPath && fs.existsSync(opts.logoPath)) {
       const logoW = opts.logoSize === 'small' ? 80 : opts.logoSize === 'large' ? 200 : 130
       const lx = opts.logoPosition?.includes('right') ? 'W-w-16' : '16'
