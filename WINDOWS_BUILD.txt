@@ -33,6 +33,32 @@
    This will also automatically download the Windows yt-dlp binary.
    It takes a minute — let it finish.
 
+   TROUBLESHOOTING — "npm" not recognized:
+   Node.js isn't installed (or your terminal was opened before
+   installing it). Install Node.js 20+, then open a NEW terminal
+   window before running npm again.
+
+   TROUBLESHOOTING — "running scripts is disabled on this system":
+   PowerShell blocks npm by default. Run this once in PowerShell:
+     Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+   Confirm with "Y", then try npm again.
+
+   TROUBLESHOOTING — "Electron failed to install correctly":
+   Electron's downloader sometimes silently extracts only part of
+   its ~140MB zip on Windows (often antivirus interference). Fix:
+     1. Delete the node_modules\electron folder
+     2. Run: npm install electron@41.2.1 --no-save
+   This usually succeeds on a retry. If it fails again, manually
+   unzip the cached file from
+     %LOCALAPPDATA%\electron\Cache\<hash>\electron-vX.X.X-win32-x64.zip
+   into node_modules\electron\dist, then create a file named
+   path.txt inside node_modules\electron containing: electron.exe
+
+   TROUBLESHOOTING — Windows on ARM (e.g. ARM64 VM):
+   Make sure you install the x64 build of Node.js, not ARM64.
+   Some packages (like ffmpeg-static) don't ship ARM64 Windows
+   binaries, but the x64 versions run fine via emulation.
+
 
 ──────────────────────────────────────
   STEP 3 — BUILD THE .EXE
