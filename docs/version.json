@@ -2,6 +2,6 @@
   "version": "0.1.0",
   "downloads": {
     "mac": "https://github.com/mdieng123/lecture-subs/releases/download/v0.1.0/LectureSubs-0.1.0-arm64.dmg",
-    "win": "#"
+    "win": "https://github.com/mdieng123/lecture-subs/releases/download/v0.1.0/LectureSubs.Setup.0.1.0.exe"
   }
 }
