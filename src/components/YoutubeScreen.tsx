@@ -4,10 +4,8 @@ import { useSegmentsStore } from '../state/segmentsStore'
 import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import ReviewPanel from './ReviewPanel'
-import { serializeSrt, formatDuration, runScrutinize, toFileUrl } from '../utils'
+import { serializeAss, formatDuration, runScrutinize, toFileUrl } from '../utils'
 import type { VideoSegment, Cue, ReviewIssue } from '../types'
-
-const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22, xl: 30, xxl: 40 }
 
 export default function YoutubeScreen() {
   const setScreen = useProjectStore((s) => s.setScreen)
@@ -117,26 +115,28 @@ export default function YoutubeScreen() {
 
       for (let i = 0; i < toExport.length; i++) {
         const seg = toExport[i]
-        const srtContent = serializeSrt(seg.cues, false)
-        const srtPath = `${tmpDir}/seg_${i}.srt`
-        await window.api.files.writeFile(srtPath, srtContent)
+        const logo = useProjectStore.getState().logoSettings
+        const style = useProjectStore.getState().subtitleStyle
+        const assContent = serializeAss(seg.cues, {
+          fontSize: style.fontSize,
+          position: style.position,
+          background: style.background,
+          includeArabic: false,
+        })
+        const subsPath = `${tmpDir}/seg_${i}.ass`
+        await window.api.files.writeFile(subsPath, assContent)
 
         const safeTitle = seg.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
         const outputPath = `${folder}/${String(i + 1).padStart(2, '0')}_${safeTitle}.mp4`
         const mainPath = hasIntro ? `${tmpDir}/seg_${i}_main.mp4` : outputPath
 
-        const logo = useProjectStore.getState().logoSettings
-        const style = useProjectStore.getState().subtitleStyle
         await window.api.ffmpeg.exportSegment(
           useProjectStore.getState().project!.videoPath,
-          srtPath,
+          subsPath,
           seg.startSeconds,
           seg.endSeconds - seg.startSeconds,
           mainPath,
           {
-            fontSize: FONT_SIZE_PX[style.fontSize] ?? 22,
-            position: style.position,
-            background: style.background,
             ...(logo.enabled && logo.path ? { logoPath: logo.path, logoPosition: logo.position, logoSize: logo.size, logoOpacity: logo.opacity } : {}),
           }
         )
