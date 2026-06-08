@@ -228,7 +228,10 @@ ipcMain.handle('ffmpeg:exportClip', (
     else if (opts.background === 'solid') { borderStyle = '4'; backColour = ',BackColour=&HCC000000' }
 
     const escapedSrt = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:')
-    const subtitleFilter = `subtitles=${escapedSrt}:force_style='FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
+    const isAss = srtPath.toLowerCase().endsWith('.ass')
+    const subtitleFilter = isAss
+      ? `subtitles=${escapedSrt}`
+      : `subtitles=${escapedSrt}:force_style='FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
 
     const cmd = ffmpeg(videoPath)
       .setStartTime(startSeconds)
@@ -319,7 +322,10 @@ ipcMain.handle('ffmpeg:exportSegment', (
     else if (opts.background === 'solid') { borderStyle = '4'; backColour = ',BackColour=&HCC000000' }
 
     const escapedSrt = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:')
-    const subtitleFilter = `subtitles=${escapedSrt}:force_style='FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
+    const isAss = srtPath.toLowerCase().endsWith('.ass')
+    const subtitleFilter = isAss
+      ? `subtitles=${escapedSrt}`
+      : `subtitles=${escapedSrt}:force_style='FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
 
     const cmd = ffmpeg(videoPath)
       .setStartTime(startSeconds)
@@ -414,7 +420,10 @@ ipcMain.handle('ffmpeg:exportHardSubs', (
     else if (opts.background === 'solid') { borderStyle = '4'; backColour = ',BackColour=&HCC000000' }
 
     const escapedSrt = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:')
-    const subtitleFilter = `subtitles=${escapedSrt}:force_style='FontName=Inter,FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
+    const isAss = srtPath.toLowerCase().endsWith('.ass')
+    const subtitleFilter = isAss
+      ? `subtitles=${escapedSrt}`
+      : `subtitles=${escapedSrt}:force_style='FontName=Inter,FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${borderStyle},Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}${backColour}'`
 
     const cmd = ffmpeg()
     if (opts.trimStart) cmd.inputOptions([`-ss ${opts.trimStart}`])

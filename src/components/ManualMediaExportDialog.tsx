@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useProjectStore } from '../state/projectStore'
-import { serializeSrt } from '../utils'
+import { serializeAss } from '../utils'
 import type { ManualMedia } from '../types'
 
 interface Props {
   items: ManualMedia[]
   onClose: () => void
 }
-
-const FONT_SIZE_PX: Record<string, number> = { small: 18, medium: 22, large: 28, xl: 38, xxl: 52 }
 
 export default function ManualMediaExportDialog({ items, onClose }: Props) {
   const project = useProjectStore((s) => s.project)
@@ -35,10 +33,15 @@ export default function ManualMediaExportDialog({ items, onClose }: Props) {
         const item = selected[i]
         setProgress(`Exporting ${i + 1} / ${selected.length}: ${item.title}…`)
 
-        const srtContent = serializeSrt(item.cues, subtitleStyle.includeArabic)
+        const assContent = serializeAss(item.cues, {
+          fontSize: subtitleStyle.fontSize,
+          position: subtitleStyle.position,
+          background: subtitleStyle.background,
+          includeArabic: subtitleStyle.includeArabic,
+        })
         const tmpDir = await window.api.files.getTmpDir()
-        const srtPath = `${tmpDir}/manual_${item.id}.srt`
-        await window.api.files.writeFile(srtPath, srtContent)
+        const subsPath = `${tmpDir}/manual_${item.id}.ass`
+        await window.api.files.writeFile(subsPath, assContent)
 
         const ext = item.kind === 'clip' ? 'mp4' : 'mp4'
         const safeName = item.title.replace(/[^a-z0-9_\-\s]/gi, '_').trim()
@@ -49,10 +52,6 @@ export default function ManualMediaExportDialog({ items, onClose }: Props) {
         if (!result) continue
 
         const opts = {
-          fontSize: FONT_SIZE_PX[subtitleStyle.fontSize] ?? 22,
-          position: subtitleStyle.position,
-          background: subtitleStyle.background,
-          includeArabic: subtitleStyle.includeArabic,
           logoPath: logoSettings.enabled ? logoSettings.path : null,
           logoPosition: logoSettings.position,
           logoSize: logoSettings.size,
@@ -62,13 +61,13 @@ export default function ManualMediaExportDialog({ items, onClose }: Props) {
         let exportResult: { error?: string }
         if (item.kind === 'clip') {
           exportResult = await window.api.ffmpeg.exportClip(
-            project.videoPath, srtPath,
+            project.videoPath, subsPath,
             item.startSeconds, item.endSeconds - item.startSeconds,
             result, opts
           )
         } else {
           exportResult = await window.api.ffmpeg.exportSegment(
-            project.videoPath, srtPath,
+            project.videoPath, subsPath,
             item.startSeconds, item.endSeconds - item.startSeconds,
             result, opts
           )

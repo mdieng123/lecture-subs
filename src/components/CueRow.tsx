@@ -7,13 +7,14 @@ interface Props {
   cue: Cue
   isSelected: boolean
   isActive: boolean
+  isMatch?: boolean
   index: number
   onSelect: () => void
   videoRef: RefObject<HTMLVideoElement | null>
   cues: Cue[]
 }
 
-export default function CueRow({ cue, isSelected, isActive, index, onSelect, videoRef, cues }: Props) {
+export default function CueRow({ cue, isSelected, isActive, isMatch, index, onSelect, videoRef, cues }: Props) {
   const updateCue = useProjectStore((s) => s.updateCue)
   const mergeWithNext = useProjectStore((s) => s.mergeWithNext)
   const deleteCue = useProjectStore((s) => s.deleteCue)
@@ -58,15 +59,23 @@ export default function CueRow({ cue, isSelected, isActive, index, onSelect, vid
 
   const borderColor = isActive
     ? 'border-[hsl(210,80%,55%)]'
+    : isMatch
+    ? 'border-[hsl(45,90%,55%)]'
     : isSelected
     ? 'border-[hsl(220,15%,35%)]'
     : 'border-transparent'
 
+  const bgColor = isActive
+    ? 'bg-[hsl(210,80%,55%,0.08)]'
+    : isMatch
+    ? 'bg-[hsl(45,90%,55%,0.08)]'
+    : isSelected
+    ? 'bg-[hsl(222,20%,16%)]'
+    : 'bg-[hsl(222,20%,13%)] hover:bg-[hsl(222,20%,15%)]'
+
   return (
     <div
-      className={`mx-2 my-1 p-2 rounded-lg border cursor-pointer transition-colors
-        ${isActive ? 'bg-[hsl(210,80%,55%,0.08)]' : isSelected ? 'bg-[hsl(222,20%,16%)]' : 'bg-[hsl(222,20%,13%)] hover:bg-[hsl(222,20%,15%)]'}
-        ${borderColor}`}
+      className={`mx-2 my-1 p-2 rounded-lg border cursor-pointer transition-colors ${bgColor} ${borderColor}`}
       onClick={onSelect}
       onKeyDown={handleKeyDown}
       tabIndex={isSelected ? 0 : -1}

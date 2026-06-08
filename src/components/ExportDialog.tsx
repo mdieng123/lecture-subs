@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useProjectStore } from '../state/projectStore'
 import { useClipsStore, buildClipsFromSuggestions } from '../state/clipsStore'
-import { serializeSrt } from '../utils'
+import { serializeSrt, serializeAss } from '../utils'
 import type { ExportOptions } from '../types'
 
 export default function ExportDialog({ onClose, onCreateSegments }: { onClose: () => void; onCreateSegments?: () => void }) {
@@ -116,6 +116,17 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
       const tmpDir = await window.api.files.getTmpDir()
       const srtPath = `${tmpDir}/export.srt`
       await window.api.files.writeFile(srtPath, srtContent)
+      // Hard-burn uses ASS so PlayRes is set correctly and font sizing matches preview
+      const assPath = `${tmpDir}/export.ass`
+      if (options.mode === 'hard') {
+        const assContent = serializeAss(clampedCues, {
+          fontSize: options.fontSize,
+          position: options.position,
+          background: options.background,
+          includeArabic: options.includeArabic,
+        })
+        await window.api.files.writeFile(assPath, assContent)
+      }
 
       // For audio-only projects, create a slideshow video first
       let videoSource = project.videoPath
@@ -143,12 +154,7 @@ export default function ExportDialog({ onClose, onCreateSegments }: { onClose: (
       if (options.mode === 'soft') {
         await window.api.ffmpeg.exportSoftSubs(videoSource, srtPath, mainExportPath, trimOpts)
       } else {
-        const fontSizeMap = { small: 18, medium: 22, large: 28, xl: 38, xxl: 52 }
-        await window.api.ffmpeg.exportHardSubs(videoSource, srtPath, mainExportPath, {
-          fontSize: fontSizeMap[options.fontSize ?? 'medium'],
-          position: options.position,
-          background: options.background,
-          includeArabic: options.includeArabic,
+        await window.api.ffmpeg.exportHardSubs(videoSource, assPath, mainExportPath, {
           ...(logoSettings.enabled && logoSettings.path ? {
             logoPath: logoSettings.path,
             logoPosition: logoSettings.position,

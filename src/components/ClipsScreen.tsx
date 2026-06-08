@@ -4,10 +4,8 @@ import { useClipsStore } from '../state/clipsStore'
 import { useReviewStore } from '../state/reviewStore'
 import SubtitleStyleBar from './SubtitleStyleBar'
 import ReviewPanel from './ReviewPanel'
-import { serializeSrt, formatDuration, runScrutinize, toFileUrl } from '../utils'
+import { serializeAss, formatDuration, runScrutinize, toFileUrl } from '../utils'
 import type { Clip, Cue, ReviewIssue } from '../types'
-
-const FONT_SIZE_PX: Record<string, number> = { small: 14, medium: 18, large: 22, xl: 30, xxl: 40 }
 
 export default function ClipsScreen() {
   const setScreen = useProjectStore((s) => s.setScreen)
@@ -114,25 +112,27 @@ export default function ClipsScreen() {
       const tmpDir = await window.api.files.getTmpDir()
       for (let i = 0; i < toExport.length; i++) {
         const clip = toExport[i]
-        const srtContent = serializeSrt(clip.cues, false)
-        const srtPath = `${tmpDir}/clip_${i}.srt`
-        await window.api.files.writeFile(srtPath, srtContent)
+        const logo = useProjectStore.getState().logoSettings
+        const style = useProjectStore.getState().subtitleStyle
+        const assContent = serializeAss(clip.cues, {
+          fontSize: style.fontSize,
+          position: style.position,
+          background: style.background,
+          includeArabic: false,
+        })
+        const subsPath = `${tmpDir}/clip_${i}.ass`
+        await window.api.files.writeFile(subsPath, assContent)
 
         const safeName = clip.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)
         const outputPath = `${folder}/${safeName}_${i + 1}.mp4`
 
-        const logo = useProjectStore.getState().logoSettings
-        const style = useProjectStore.getState().subtitleStyle
         await window.api.ffmpeg.exportClip(
           useProjectStore.getState().project!.videoPath,
-          srtPath,
+          subsPath,
           clip.startSeconds,
           clip.endSeconds - clip.startSeconds,
           outputPath,
           {
-            fontSize: FONT_SIZE_PX[style.fontSize] ?? 18,
-            position: style.position,
-            background: style.background,
             clipBg: style.clipBg ?? 'blur',
             ...(logo.enabled && logo.path ? { logoPath: logo.path, logoPosition: logo.position, logoSize: logo.size, logoOpacity: logo.opacity } : {}),
           }
