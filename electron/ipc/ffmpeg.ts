@@ -238,20 +238,27 @@ ipcMain.handle('ffmpeg:exportClip', (
       .setDuration(durationSeconds)
 
     const clipBg = opts.clipBg ?? 'blur'
-    const bgColor = clipBg === 'white' ? 'white' : 'black'
-    // Build the video layout filter for 9:16 output
+    // Build the 9:16 video layout. Crop is a single-chain filter; the other
+    // backgrounds split the input into a foreground (centered, aspect-preserved)
+    // and a background layer (blurred/solid color filling the 9:16 frame), then
+    // overlay the foreground on the background. Earlier versions used pad= for
+    // the foreground, but `pad=ih*9/16:ih` reads ih *after* the scale step, so
+    // for horizontal inputs the pad target shrank below the scaled width and
+    // ffmpeg failed with "Padded dimensions cannot be smaller than input
+    // dimensions". Overlaying onto a pre-sized bg avoids the issue entirely.
     let layoutFilter: string
     if (clipBg === 'crop') {
       layoutFilter = 'crop=ih*9/16:ih'
-    } else if (clipBg === 'blur') {
+    } else {
+      const bgEffect = clipBg === 'blur'
+        ? 'boxblur=20:5'
+        : `drawbox=color=${clipBg === 'white' ? 'white' : 'black'}:t=fill`
       layoutFilter = [
         'split=2[bg][fg]',
-        '[bg]scale=ih*9/16:ih:force_original_aspect_ratio=increase,crop=ih*9/16:ih,boxblur=20:5,setsar=1[blurred]',
-        '[fg]scale=ih*9/16:ih:force_original_aspect_ratio=decrease,pad=ih*9/16:ih:(ow-iw)/2:(oh-ih)/2:black@0,setsar=1[padded]',
-        '[blurred][padded]overlay=0:0',
+        `[bg]scale=ih*9/16:ih:force_original_aspect_ratio=increase,crop=ih*9/16:ih,${bgEffect},setsar=1[bgout]`,
+        '[fg]scale=ih*9/16:ih:force_original_aspect_ratio=decrease,setsar=1[fgout]',
+        '[bgout][fgout]overlay=(W-w)/2:(H-h)/2',
       ].join(';')
-    } else {
-      layoutFilter = `scale=ih*9/16:ih:force_original_aspect_ratio=decrease,pad=ih*9/16:ih:(ow-iw)/2:(oh-ih)/2:${bgColor}`
     }
 
     if (opts.logoPath && fs.existsSync(opts.logoPath)) {
@@ -262,9 +269,9 @@ ipcMain.handle('ffmpeg:exportClip', (
       const logoScale = alpha < 1
         ? `[1:v]scale=${logoW}:-1,format=rgba,colorchannelmixer=aa=${alpha}[logo]`
         : `[1:v]scale=${logoW}:-1[logo]`
-      const layoutWithSubtitle = clipBg === 'blur'
-        ? `[0:v]${layoutFilter}[laid];[laid]${subtitleFilter}[subbed]`
-        : `[0:v]${layoutFilter},${subtitleFilter}[subbed]`
+      const layoutWithSubtitle = clipBg === 'crop'
+        ? `[0:v]${layoutFilter},${subtitleFilter}[subbed]`
+        : `[0:v]${layoutFilter}[laid];[laid]${subtitleFilter}[subbed]`
       cmd.input(opts.logoPath)
         .outputOptions([
           '-filter_complex',
@@ -274,15 +281,15 @@ ipcMain.handle('ffmpeg:exportClip', (
         ])
         .videoCodec('libx264').audioCodec('aac')
     } else {
-      if (clipBg === 'blur') {
+      if (clipBg === 'crop') {
+        cmd.videoFilters([layoutFilter, subtitleFilter])
+          .videoCodec('libx264').audioCodec('aac')
+          .outputOptions(['-preset medium', '-crf 22', '-pix_fmt yuv420p'])
+      } else {
         cmd.outputOptions([
           '-filter_complex', `[0:v]${layoutFilter}[laid];[laid]${subtitleFilter}`,
           '-preset medium', '-crf 22', '-pix_fmt yuv420p',
         ]).videoCodec('libx264').audioCodec('aac')
-      } else {
-        cmd.videoFilters([layoutFilter, subtitleFilter])
-          .videoCodec('libx264').audioCodec('aac')
-          .outputOptions(['-preset medium', '-crf 22', '-pix_fmt yuv420p'])
       }
     }
 
